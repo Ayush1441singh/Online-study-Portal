@@ -18,8 +18,6 @@ const Message = require('./Models/message.js');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
@@ -126,4 +124,5 @@ io.on('connection', (socket) => {
     });
 });
 
-server.listen(3000, () => console.log('🚀 Port 3000 is live now'));
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
