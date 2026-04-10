@@ -1,0 +1,75 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Study Portal - Login</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 flex items-center justify-center h-screen">
+
+    <div class="bg-white p-8 rounded-lg shadow-lg w-96">
+        <h2 class="text-2xl font-bold text-center text-blue-600 mb-6">Welcome Back</h2>
+        
+        <form id="loginForm" class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Email Address</label>
+                <input type="email" id="email" required class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Password</label>
+                <input type="password" id="password" required class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+
+            <button type="submit" class="w-full bg-blue-600 text-white font-bold py-2 rounded-lg hover:bg-blue-700 transition duration-300">
+                Log In
+            </button>
+        </form>
+
+        <p id="message" class="mt-4 text-center text-sm font-semibold"></p>
+<p class="mt-4 text-center text-sm text-gray-600">Need an account? <a href="/registers.html" class="text-blue-600 hover:underline">Register</a></p>    </div>
+
+    <script>
+        const form = document.getElementById('loginForm');
+        const messageDisplay = document.getElementById('message');
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                const response = await fetch('/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+
+                const data = await response.json();
+
+                if (response.status === 200) {
+                    messageDisplay.style.color = 'green';
+                    messageDisplay.textContent = 'Login successful! Redirecting...';
+                    
+                    // Store the username in the browser's memory so we can use it on the dashboard
+                   // Login success hone par ye zaroor hona chahiye:
+localStorage.setItem('username', data.username);
+                    
+                    // Redirect to the dashboard after 1 second
+                    setTimeout(() => {
+                        window.location.href = '/dashboard.html';
+                    }, 1000);
+                } else {
+                    messageDisplay.style.color = 'red';
+                    messageDisplay.textContent = data.message;
+                }
+            } catch (err) {
+                messageDisplay.style.color = 'red';
+                messageDisplay.textContent = 'Server error. Try again.';
+            }
+        });
+    </script>
+</body>
+</html>

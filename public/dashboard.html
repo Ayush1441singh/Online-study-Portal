@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>StudyPortal - Pro Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background: #0f172a; color: white; font-family: 'Inter', sans-serif; overflow-x: hidden; }
+        .glass-card { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 2rem; transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .glass-card:hover { transform: translateY(-8px); border-color: #6366f1; }
+        
+        /* 🛠️ MODAL STYLES */
+        #editModal { display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(4px); z-index: 100; align-items: center; justify-content: center; }
+        .modal-content { background: #1e293b; border: 1px solid #6366f1; width: 400px; padding: 2rem; border-radius: 1.5rem; box-shadow: 0 0 30px rgba(99, 102, 241, 0.2); }
+    </style>
+</head>
+<body class="min-h-screen p-8">
+
+    <header class="max-w-6xl mx-auto flex justify-between items-center mb-16">
+        <h1 class="text-3xl font-black italic tracking-tighter uppercase">STUDY<span class="text-indigo-500">PORTAL</span></h1>
+        <button onclick="logout()" class="bg-white/5 border border-white/10 px-6 py-2 rounded-full text-xs font-bold hover:bg-red-500/20 transition-all">Logout</button>
+    </header>
+
+    <main class="max-w-6xl mx-auto space-y-12">
+        
+        <div class="glass-card p-10 flex items-center space-x-10 relative">
+            <div class="relative flex-shrink-0">
+                <img id="profileImg" src="" class="w-36 h-36 rounded-[2.5rem] object-cover border-4 border-white/5 shadow-2xl">
+                
+                <button onclick="openModal()" class="absolute -bottom-2 -right-2 bg-indigo-600 w-12 h-12 rounded-2xl flex items-center justify-center border-4 border-[#0f172a] hover:scale-110 active:scale-95 transition-all shadow-xl z-20">
+                    <i class="fas fa-pencil-alt text-white text-sm"></i>
+                </button>
+            </div>
+
+            <div class="flex-1">
+                <h2 id="welcomeText" class="text-5xl font-black italic mb-3 tracking-tight">Welcome back!</h2>
+                <p id="bioText" class="text-slate-400 text-lg italic">"Life is a learning process, let's crush it!"</p>
+                <p class="mt-4 text-sm font-bold text-indigo-400 uppercase tracking-widest">User: <span id="userSpan">Ayush</span></p>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div onclick="join('Calculus')" class="glass-card p-12 group cursor-pointer">
+                <i class="fas fa-ruler-combined text-3xl text-indigo-400 mb-6 block"></i>
+                <h3 class="text-3xl font-black italic mb-2">Calculus Room</h3>
+                <p class="text-slate-500 font-medium">Derivatives & Integrals Live Hub</p>
+            </div>
+            <div onclick="join('Java')" class="glass-card p-12 group cursor-pointer">
+                <i class="fas fa-coffee text-3xl text-indigo-400 mb-6 block"></i>
+                <h3 class="text-3xl font-black italic mb-2">Java Masters</h3>
+                <p class="text-slate-500 font-medium">OOPs & Logic Mastery Zone</p>
+            </div>
+        </div>
+    </main>
+
+    <div id="editModal">
+        <div class="modal-content text-center animate-in fade-in zoom-in duration-300">
+            <h3 class="text-xl font-bold mb-6 italic">Edit Profile Details</h3>
+            
+            <div class="space-y-4">
+                <div class="text-left">
+                    <label class="text-[10px] uppercase font-bold text-slate-500 ml-2">Your Bio</label>
+                    <input id="newBio" type="text" placeholder="Update your bio..." class="w-full bg-slate-900 border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-indigo-500 transition">
+                </div>
+                <div class="text-left">
+                    <label class="text-[10px] uppercase font-bold text-slate-500 ml-2">Profile Image URL</label>
+                    <input id="newPic" type="text" placeholder="Paste image link..." class="w-full bg-slate-900 border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-indigo-500 transition">
+                </div>
+            </div>
+
+            <div class="flex space-x-3 mt-8">
+                <button onclick="closeModal()" class="flex-1 bg-slate-800 py-3 rounded-xl font-bold text-sm hover:bg-slate-700 transition">Cancel</button>
+                <button onclick="saveChanges()" class="flex-1 bg-indigo-600 py-3 rounded-xl font-bold text-sm hover:bg-indigo-500 shadow-lg shadow-indigo-500/20 transition">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const user = localStorage.getItem('username') || "Ayush";
+        
+        // Initial Load
+        document.getElementById('welcomeText').textContent = `Welcome back, ${user}!`;
+        document.getElementById('userSpan').textContent = user;
+        document.getElementById('profileImg').src = `https://ui-avatars.com/api/?name=${user}&background=6366f1&color=fff&size=200&bold=true`;
+
+        // Load Saved Bio (if any)
+        const savedBio = localStorage.getItem('userBio');
+        if(savedBio) document.getElementById('bioText').textContent = `"${savedBio}"`;
+
+        function openModal() {
+            document.getElementById('editModal').style.display = 'flex';
+            document.getElementById('newBio').value = document.getElementById('bioText').textContent.replace(/"/g, '');
+        }
+
+        function closeModal() {
+            document.getElementById('editModal').style.display = 'none';
+        }
+
+        function saveChanges() {
+    const bioVal = document.getElementById('newBio').value;
+    const picVal = document.getElementById('newPic').value;
+
+    if(bioVal) {
+        document.getElementById('bioText').textContent = `"${bioVal}"`;
+        localStorage.setItem('userBio', bioVal);
+    }
+    
+    if(picVal && picVal.trim() !== "") {
+        const img = document.getElementById('profileImg');
+        
+        // Nayi image load karne ki koshish karo
+        img.src = picVal;
+        
+        // Agar link galat hua toh automatic purana avatar wapas aa jayega
+        img.onerror = function() {
+            this.src = `https://ui-avatars.com/api/?name=${user}&background=6366f1&color=fff&size=200&bold=true`;
+            alert("Bhai, ye link sahi nahi hai! Direct image link dalo (Jo .jpg ya .png pe khatam ho).");
+        };
+        
+        localStorage.setItem('userPic', picVal);
+    }
+    
+    closeModal();
+}
+
+        function join(room) { window.location.href = `studyroom.html?room=${room}`; }
+        function logout() { localStorage.clear(); window.location.href = 'login.html'; }
+    </script>
+</body>
+</html>
