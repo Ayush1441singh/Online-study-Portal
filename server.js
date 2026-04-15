@@ -76,6 +76,10 @@ app.post('/register', async (req, res) => {
 });
 
 // Login Route
+// Ye line ensure karti hai ki home page pe login.html khule
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
 app.post('/login', async (req, res) => {
     try {
         const lowEmail = req.body.email.toLowerCase().trim();
