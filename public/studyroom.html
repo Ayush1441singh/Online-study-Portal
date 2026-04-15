@@ -48,7 +48,7 @@
         <div id="ai-messages" class="flex-1 p-4 overflow-y-auto text-sm space-y-2 bg-slate-950"></div>
         <div class="p-3 border-t border-white/10 flex space-x-2">
             <input id="ai-input" placeholder="Ask AI..." class="flex-1 bg-white/5 p-2 rounded text-xs outline-none">
-            <button onclick="askAI()" class="text-indigo-400 font-bold text-xs">ASK</button>
+            <button onclick="askAI()" class="text-indigo-400 font-bold text-xs uppercase">Ask</button>
         </div>
     </div>
 
@@ -73,39 +73,63 @@
     const socket = io();
     const username = localStorage.getItem('username');
     const room = new URLSearchParams(window.location.search).get('room');
-    const myPeer = new Peer(undefined, { host: '/', port: '3001' }); 
+    
+    // --- 🛠️ PEERJS RENDER FIX ---
+    const myPeer = new Peer(undefined, {
+        host: '0.peerjs.com',
+        port: 443,
+        secure: true
+    }); 
+
     const videoGrid = document.getElementById('video-grid');
     let localStream, isVideoOn = false, isMicOn = false, typingTimeout;
+    const peers = {}; // Saare active calls ko track karne ke liye
 
     if(!username || !room) location.href = 'dashboard.html';
     else socket.emit('join room', { username, room });
 
-    // --- VIDEO & VOICE ---
+    // --- 📹 VIDEO & VOICE LOGIC ---
+    myPeer.on('open', id => {
+        console.log('My Peer ID:', id);
+    });
+
+    // Dusre user ki call uthao
     myPeer.on('call', call => {
         call.answer(localStream);
         const video = document.createElement('video');
-        call.on('stream', userStream => addVideoStream(video, userStream));
+        call.on('stream', userStream => {
+            addVideoStream(video, userStream);
+        });
     });
 
     socket.on('user-connected', userId => {
         if(localStream) {
-            const call = myPeer.call(userId, localStream);
-            const video = document.createElement('video');
-            call.on('stream', userStream => addVideoStream(video, userStream));
+            connectToNewUser(userId, localStream);
         }
     });
 
     async function toggleVideo() {
         if(!isVideoOn) {
-            localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-            if(!isMicOn) localStream.getAudioTracks()[0].enabled = false;
-            const v = document.createElement('video'); v.muted = true;
-            addVideoStream(v, localStream);
-            socket.emit('user-joined-media', { userId: myPeer.id, room });
-            isVideoOn = true; document.getElementById('vBtn').textContent = "📽️ ON";
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                if(!isMicOn) localStream.getAudioTracks()[0].enabled = false;
+                
+                const myVideo = document.createElement('video');
+                myVideo.muted = true; // Apni awaz khud ko na sunayi de
+                addVideoStream(myVideo, localStream);
+
+                // Dusron ko batao ki main online aa gaya hoon
+                socket.emit('user-joined-media', { userId: myPeer.id, room });
+
+                isVideoOn = true;
+                document.getElementById('vBtn').textContent = "📽️ ON";
+            } catch (err) {
+                alert("Please allow Camera/Mic access!");
+            }
         } else {
             localStream.getVideoTracks()[0].enabled = false;
-            isVideoOn = false; document.getElementById('vBtn').textContent = "📹 Video";
+            isVideoOn = false;
+            document.getElementById('vBtn').textContent = "📹 Video";
         }
     }
 
@@ -117,16 +141,38 @@
         document.getElementById('micBtn').classList.toggle('bg-green-600');
     }
 
-    function addVideoStream(v, s) { v.srcObject = s; v.addEventListener('loadedmetadata', () => v.play()); v.style.pointerEvents = "auto"; videoGrid.append(v); }
-
-    // --- SCREEN SHARE ---
-    async function startScreenShare() {
-        const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-        const v = document.createElement('video'); v.srcObject = stream; v.play();
-        videoGrid.append(v); stream.getVideoTracks()[0].onended = () => v.remove();
+    function connectToNewUser(userId, stream) {
+        const call = myPeer.call(userId, stream);
+        const video = document.createElement('video');
+        call.on('stream', userStream => {
+            addVideoStream(video, userStream);
+        });
+        call.on('close', () => video.remove());
+        peers[userId] = call;
     }
 
-    // --- WHITEBOARD ---
+    function addVideoStream(v, s) {
+        v.srcObject = s;
+        v.addEventListener('loadedmetadata', () => v.play());
+        v.style.pointerEvents = "auto";
+        videoGrid.append(v);
+    }
+
+    // --- 🖥️ SCREEN SHARE FIX ---
+    async function startScreenShare() {
+        try {
+            const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+            const video = document.createElement('video');
+            addVideoStream(video, screenStream);
+
+            // Saare connected doston ko screen bhejo
+            socket.emit('user-joined-media', { userId: myPeer.id, room });
+
+            screenStream.getVideoTracks()[0].onended = () => video.remove();
+        } catch (err) { console.log("Share cancel"); }
+    }
+
+    // --- WHITEBOARD & CHAT (No Changes) ---
     const canvas = document.getElementById('wbCanvas');
     const ctx = canvas.getContext('2d');
     let drawing = false;
@@ -145,7 +191,6 @@
     };
     function clearWhiteboard() { ctx.clearRect(0, 0, canvas.width, canvas.height); }
 
-    // --- CHAT, TYPING & USER LIST ---
     const messageInput = document.getElementById('messageInput');
     messageInput.addEventListener('keypress', () => {
         socket.emit('typing', { user: username, room: room });
@@ -191,7 +236,6 @@
     socket.on('load history', msgs => msgs.forEach(append));
     socket.on('chat message', data => append(data));
 
-    // --- AI & FILE ---
     function toggleAI() { const p = document.getElementById('ai-panel'); p.style.display = p.style.display === 'flex' ? 'none' : 'flex'; }
     async function askAI() {
         const input = document.getElementById('ai-input');
