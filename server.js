@@ -28,8 +28,8 @@ const aiModel = genAI.getGenerativeModel({ model: "gemini-pro" });
 const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
-        user: 'ayushproject7@gmail.com', // 👈 TERA EMAIL
-        pass: 'abcd efgh ijkl mnop'      // 👈 TERA 16-digit APP PASSWORD
+        user: 'btkbeast@gmail.com', // 👈 TERA EMAIL
+        pass: 'onor cpka pojn fsf'      // 👈 TERA 16-digit APP PASSWORD
     }
 });
 
