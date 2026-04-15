@@ -29,7 +29,6 @@
             <button id="micBtn" onclick="toggleMic()" class="text-[10px] bg-green-500/20 text-green-400 border border-green-400/20 px-3 py-1.5 rounded-full font-bold uppercase">🎤 Voice</button>
             <button onclick="startScreenShare()" class="text-[10px] bg-indigo-500/20 text-indigo-400 border border-indigo-400/20 px-3 py-1.5 rounded-full font-bold uppercase">🖥️ Share</button>
             <button onclick="toggleWhiteboard()" class="text-[10px] bg-purple-500/20 text-purple-400 border border-purple-400/20 px-3 py-1.5 rounded-full font-bold uppercase">🎨 Board</button>
-            <button onclick="clearChat()" class="text-[10px] bg-red-500/20 text-red-500 px-3 py-1.5 rounded-full font-bold uppercase">🗑️ Clear</button>
         </div>
     </header>
 
@@ -74,38 +73,30 @@
     const username = localStorage.getItem('username');
     const room = new URLSearchParams(window.location.search).get('room');
     
-    // --- 🛠️ PEERJS RENDER FIX ---
-    const myPeer = new Peer(undefined, {
-        host: '0.peerjs.com',
-        port: 443,
-        secure: true
-    }); 
+    // --- 🛠️ PEERJS CLOUD FIX ---
+    const myPeer = new Peer(undefined, { host: '0.peerjs.com', port: 443, secure: true }); 
 
     const videoGrid = document.getElementById('video-grid');
     let localStream, isVideoOn = false, isMicOn = false, typingTimeout;
-    const peers = {}; // Saare active calls ko track karne ke liye
+    const peers = {};
 
     if(!username || !room) location.href = 'dashboard.html';
-    else socket.emit('join room', { username, room });
+    else {
+        document.getElementById('roomTitle').textContent = room;
+        socket.emit('join room', { username, room });
+    }
 
     // --- 📹 VIDEO & VOICE LOGIC ---
-    myPeer.on('open', id => {
-        console.log('My Peer ID:', id);
-    });
+    myPeer.on('open', id => console.log('My Peer ID:', id));
 
-    // Dusre user ki call uthao
     myPeer.on('call', call => {
         call.answer(localStream);
         const video = document.createElement('video');
-        call.on('stream', userStream => {
-            addVideoStream(video, userStream);
-        });
+        call.on('stream', userStream => addVideoStream(video, userStream));
     });
 
     socket.on('user-connected', userId => {
-        if(localStream) {
-            connectToNewUser(userId, localStream);
-        }
+        if(localStream) connectToNewUser(userId, localStream);
     });
 
     async function toggleVideo() {
@@ -115,17 +106,14 @@
                 if(!isMicOn) localStream.getAudioTracks()[0].enabled = false;
                 
                 const myVideo = document.createElement('video');
-                myVideo.muted = true; // Apni awaz khud ko na sunayi de
+                myVideo.muted = true;
                 addVideoStream(myVideo, localStream);
 
-                // Dusron ko batao ki main online aa gaya hoon
                 socket.emit('user-joined-media', { userId: myPeer.id, room });
 
                 isVideoOn = true;
                 document.getElementById('vBtn').textContent = "📽️ ON";
-            } catch (err) {
-                alert("Please allow Camera/Mic access!");
-            }
+            } catch (err) { alert("Please allow Camera/Mic access!"); }
         } else {
             localStream.getVideoTracks()[0].enabled = false;
             isVideoOn = false;
@@ -144,9 +132,7 @@
     function connectToNewUser(userId, stream) {
         const call = myPeer.call(userId, stream);
         const video = document.createElement('video');
-        call.on('stream', userStream => {
-            addVideoStream(video, userStream);
-        });
+        call.on('stream', userStream => addVideoStream(video, userStream));
         call.on('close', () => video.remove());
         peers[userId] = call;
     }
@@ -158,21 +144,18 @@
         videoGrid.append(v);
     }
 
-    // --- 🖥️ SCREEN SHARE FIX ---
+    // --- 🖥️ SCREEN SHARE LOGIC ---
     async function startScreenShare() {
         try {
             const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
             const video = document.createElement('video');
             addVideoStream(video, screenStream);
-
-            // Saare connected doston ko screen bhejo
             socket.emit('user-joined-media', { userId: myPeer.id, room });
-
             screenStream.getVideoTracks()[0].onended = () => video.remove();
         } catch (err) { console.log("Share cancel"); }
     }
 
-    // --- WHITEBOARD & CHAT (No Changes) ---
+    // --- WHITEBOARD & CHAT ---
     const canvas = document.getElementById('wbCanvas');
     const ctx = canvas.getContext('2d');
     let drawing = false;
@@ -210,18 +193,13 @@
 
     function append(data) {
         const isMe = data.user === username;
-        const now = new Date();
-        const timeStr = `${now.getHours()}:${now.getMinutes().toString().padStart(2, '0')}`;
         const div = document.createElement('div');
-        div.className = `flex ${isMe ? 'justify-end' : 'justify-start'} items-end space-x-3 mb-2 group relative`;
+        div.className = `flex ${isMe ? 'justify-end' : 'justify-start'} items-end space-x-3 mb-2`;
         div.innerHTML = `
             ${!isMe ? `<img src="https://ui-avatars.com/api/?name=${data.user}&background=random&color=fff&bold=true" class="w-8 h-8 rounded-full">` : ''}
-            <div class="relative">
-                <div class="${isMe ? 'bg-indigo-600' : 'glass-chat'} p-4 rounded-2xl max-w-sm shadow-xl">
-                    <p class="text-[9px] font-black uppercase opacity-50 mb-1">${data.user}</p>
-                    <p class="text-sm">${data.msg}</p>
-                </div>
-                <span class="absolute ${isMe ? '-left-12' : '-right-12'} top-1/2 -translate-y-1/2 text-[10px] text-slate-500 font-bold opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">${timeStr}</span>
+            <div class="${isMe ? 'bg-indigo-600' : 'glass-chat'} p-4 rounded-2xl max-w-sm shadow-xl">
+                <p class="text-[9px] font-black uppercase opacity-50 mb-1">${data.user}</p>
+                <p class="text-sm">${data.msg}</p>
             </div>
             ${isMe ? `<img src="https://ui-avatars.com/api/?name=${data.user}&background=random&color=fff&bold=true" class="w-8 h-8 rounded-full">` : ''}
         `;
@@ -254,7 +232,6 @@
         const d = await res.json();
         socket.emit('chat message', { user: username, msg: `Shared: <a href="${d.filePath}" target="_blank" class="underline font-bold text-indigo-400">📄 ${d.fileName}</a>`, room: room });
     };
-    async function clearChat() { if(confirm("Clear history?")) { await fetch(`/clear-chat/${room}`, { method: 'DELETE' }); location.reload(); } }
     </script>
 </body>
 </html>
