@@ -1,22 +1,33 @@
 const mongoose = require('mongoose');
-const bcrypt = require('bcrypt');
 
+// --- USER SCHEMA DESIGN ---
 const userSchema = new mongoose.Schema({
-    username: { type: String, required: true },
-    email: { type: String, required: true, unique: true },
-    password: { type: String, required: true },
-    // Nayi fields add karo
-    profilePic: { type: String, default: '/uploads/default-avatar.png' }, 
-    bio: { type: String, default: 'Hey there! I am using StudyPortal.' }
+    // User ka naam (Dashboard pe dikhane ke liye)
+    username: { 
+        type: String, 
+        required: true,
+        trim: true 
+    },
+    // Email (Unique hona chahiye taaki ek email se do account na banein)
+    email: { 
+        type: String, 
+        required: true, 
+        unique: true,
+        lowercase: true,
+        trim: true 
+    },
+    // Hashed Password (Bcrypt wala encrypted string save hoga)
+    password: { 
+        type: String, 
+        required: true 
+    },
+    // Created At (Optional: Ye dekhne ke liye account kab bana)
+    createdAt: { 
+        type: Date, 
+        default: Date.now 
+    }
 });
-// This is the security layer! 
-// It automatically scrambles (hashes) the password right before it saves to the database.
-// This is the updated security layer! 
-userSchema.pre('save', async function() {
-    // If the password wasn't changed, skip this step
-    if (!this.isModified('password')) return; 
-    
-    // Scramble the password with a "salt" of 10 rounds
-    this.password = await bcrypt.hash(this.password, 10);
-});
+
+// --- EXPORT THE MODEL ---
+// Dhyaan rakhna yahan 'User' hi export ho kyunki server.js isi naam se dhoond raha hai
 module.exports = mongoose.model('User', userSchema);
