@@ -1,75 +1,40 @@
-
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Study Portal - Login</title>
+    <title>Login - StudyPortal</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background: #0f172a; color: white; }
+        .glass { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.05); }
+    </style>
 </head>
-<body class="bg-gray-100 flex items-center justify-center h-screen">
-
-    <div class="bg-white p-8 rounded-lg shadow-lg w-96">
-        <h2 class="text-2xl font-bold text-center text-blue-600 mb-6">Welcome Back</h2>
-        
-        <form id="loginForm" class="space-y-4">
-            <div>
-                <label class="block text-sm font-medium text-gray-700">Email Address</label>
-                <input type="email" id="email" required class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-            </div>
-
-            <div>
-                <label class="block text-sm font-medium text-gray-700">Password</label>
-                <input type="password" id="password" required class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-            </div>
-
-            <button type="submit" class="w-full bg-blue-600 text-white font-bold py-2 rounded-lg hover:bg-blue-700 transition duration-300">
-                Log In
-            </button>
+<body class="h-screen flex items-center justify-center p-6">
+    <div class="glass w-full max-w-md p-10 rounded-[2.5rem] shadow-2xl">
+        <h1 class="text-3xl font-black italic text-center mb-10 uppercase">STUDY<span class="text-indigo-500">PORTAL</span></h1>
+        <form id="loginForm" class="space-y-6">
+            <input id="email" type="email" placeholder="Email" class="w-full bg-white/5 border border-white/10 p-4 rounded-2xl outline-none focus:border-indigo-500 transition">
+            <input id="password" type="password" placeholder="Password" class="w-full bg-white/5 border border-white/10 p-4 rounded-2xl outline-none focus:border-indigo-500 transition">
+            <button class="w-full bg-indigo-600 py-4 rounded-2xl font-black uppercase text-xs">Login</button>
         </form>
-
-        <p id="message" class="mt-4 text-center text-sm font-semibold"></p>
-<p class="mt-4 text-center text-sm text-gray-600">Need an account? <a href="/registers.html" class="text-blue-600 hover:underline">Register</a></p>    </div>
-
+        <p class="text-center mt-6 text-xs opacity-50">Naye ho? <a href="register.html" class="text-indigo-400 font-bold">Register Karo</a></p>
+    </div>
     <script>
-        const form = document.getElementById('loginForm');
-        const messageDisplay = document.getElementById('message');
-
-        form.addEventListener('submit', async (e) => {
+        document.getElementById('loginForm').onsubmit = async (e) => {
             e.preventDefault();
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
-
-            try {
-                const response = await fetch('/login', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, password })
-                });
-
-                const data = await response.json();
-
-                if (response.status === 200) {
-                    messageDisplay.style.color = 'green';
-                    messageDisplay.textContent = 'Login successful! Redirecting...';
-                    
-                    // Store the username in the browser's memory so we can use it on the dashboard
-                   // Login success hone par ye zaroor hona chahiye:
-localStorage.setItem('username', data.username);
-                    
-                    // Redirect to the dashboard after 1 second
-                    setTimeout(() => {
-                        window.location.href = '/dashboard.html';
-                    }, 1000);
-                } else {
-                    messageDisplay.style.color = 'red';
-                    messageDisplay.textContent = data.message;
-                }
-            } catch (err) {
-                messageDisplay.style.color = 'red';
-                messageDisplay.textContent = 'Server error. Try again.';
-            }
-        });
+            const res = await fetch('/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password })
+            });
+            const data = await res.json();
+            if(data.success) {
+                localStorage.setItem('username', data.username);
+                localStorage.setItem('userEmail', data.email); // 👈 Critical Fix
+                window.location.href = 'dashboard.html';
+            } else { alert(data.message); }
+        };
     </script>
 </body>
 </html>

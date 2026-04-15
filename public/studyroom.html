@@ -7,78 +7,59 @@
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        body { background: #0f172a; color: white; font-family: 'Inter', sans-serif; overflow: hidden; }
-        .glass-panel { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.05); }
-        
-        /* Draggable Video Box */
-        #video-grid { 
-            position: absolute; top: 100px; right: 20px; width: 240px; 
-            z-index: 50; cursor: grab; background: rgba(0,0,0,0.5); 
-            padding: 12px; border-radius: 1.5rem; border: 1px solid rgba(255,255,255,0.1);
-            display: flex; flex-direction: column; gap: 12px;
-        }
+        body { background: #0f172a; color: white; overflow: hidden; font-family: sans-serif; }
+        #video-grid { position: absolute; top: 100px; right: 20px; width: 240px; z-index: 50; cursor: grab; background: rgba(0,0,0,0.5); padding: 12px; border-radius: 1.5rem; border: 1px solid rgba(255,255,255,0.1); display: flex; flex-direction: column; gap: 12px; }
         video { width: 100%; height: 140px; border-radius: 1rem; border: 2px solid #6366f1; object-fit: cover; background: #000; }
-        video:fullscreen { object-fit: contain; }
-
-        /* AI Assistant Style */
         #ai-panel { display: none; position: fixed; bottom: 100px; right: 25px; width: 320px; height: 480px; background: #1e293b; border-radius: 25px; z-index: 1000; flex-direction: column; border: 1px solid #6366f1; overflow: hidden; box-shadow: 0 25px 50px rgba(0,0,0,0.5); }
-        #whiteboardContainer { display: none; position: fixed; inset: 5%; background: white; z-index: 100; border-radius: 2.5rem; box-shadow: 0 0 100px rgba(0,0,0,0.5); }
+        #whiteboardContainer { display: none; position: fixed; inset: 5%; background: white; z-index: 100; border-radius: 2.5rem; }
     </style>
 </head>
 <body class="h-screen flex flex-col">
 
     <header class="p-4 bg-slate-900/90 flex justify-between items-center border-b border-white/5 z-10">
         <div class="flex items-center space-x-6">
-            <button onclick="location.href='dashboard.html'" class="text-slate-400 hover:text-white transition font-bold">← Exit Session</button>
-            <h2 id="roomTitle" class="font-black italic text-indigo-400 uppercase tracking-[0.2em] text-lg">ROOM</h2>
+            <button onclick="location.href='dashboard.html'" class="text-slate-400 hover:text-white transition font-bold">← Exit</button>
+            <h2 id="roomTitle" class="font-black italic text-indigo-400 uppercase tracking-widest text-lg">ROOM</h2>
         </div>
         <div class="flex space-x-3">
-            <button id="vBtn" onclick="toggleVideo()" class="text-[10px] bg-white/5 px-5 py-2.5 rounded-full font-black tracking-widest hover:bg-indigo-600 transition">📹 VIDEO</button>
-            <button id="micBtn" onclick="toggleMic()" class="text-[10px] bg-white/5 px-5 py-2.5 rounded-full font-black tracking-widest hover:bg-indigo-600 transition">🎤 VOICE</button>
-            <button onclick="startScreenShare()" class="text-[10px] bg-indigo-600 px-6 py-2.5 rounded-full font-black shadow-lg shadow-indigo-500/20 hover:scale-105 transition uppercase italic">🖥️ Share Screen</button>
-            <button onclick="toggleWhiteboard()" class="text-[10px] bg-white/5 px-5 py-2.5 rounded-full font-black uppercase tracking-widest">🎨 Board</button>
-            <button onclick="clearChat()" class="text-[10px] bg-red-500/10 text-red-500 px-5 py-2.5 rounded-full font-black border border-red-500/20 hover:bg-red-600 hover:text-white transition uppercase tracking-widest">🗑️ Clear Chat</button>
+            <button onclick="toggleVideo()" class="text-[10px] bg-white/5 px-5 py-2.5 rounded-full font-black hover:bg-indigo-600 transition">📹 VIDEO</button>
+            <button onclick="startScreenShare()" class="text-[10px] bg-indigo-600 px-6 py-2.5 rounded-full font-black shadow-lg">🖥️ SHARE SCREEN</button>
+            <button onclick="toggleWhiteboard()" class="text-[10px] bg-white/5 px-5 py-2.5 rounded-full font-black uppercase">🎨 BOARD</button>
+            <button onclick="clearChat()" class="text-[10px] bg-red-500/10 text-red-500 px-5 py-2.5 rounded-full font-black border border-red-500/20 hover:bg-red-600 transition">🗑️ CLEAR</button>
         </div>
     </header>
 
     <div class="flex flex-1 overflow-hidden relative">
-        <div class="w-72 bg-slate-900/50 p-8 border-r border-white/5 overflow-y-auto">
-            <h3 class="text-[10px] font-black text-indigo-400 mb-8 uppercase tracking-[0.3em] italic underline decoration-2 underline-offset-8">Live Students</h3>
-            <ul id="userList" class="space-y-4"></ul>
+        <div class="w-64 bg-slate-900/50 p-8 border-r border-white/5 overflow-y-auto">
+            <h3 class="text-[10px] font-black text-indigo-400 mb-6 uppercase tracking-widest italic underline decoration-2 underline-offset-4">Live Now</h3>
+            <ul id="userList" class="space-y-3"></ul>
         </div>
-        
         <div id="chatBox" class="flex-1 p-10 overflow-y-auto space-y-6 scroll-smooth"></div>
-
-        <div id="video-grid">
-            <p class="text-[8px] text-center opacity-30 font-black uppercase tracking-widest mb-1 border-b border-white/10 pb-1">Video Stream</p>
-        </div>
+        <div id="video-grid"><p class="text-center text-[8px] opacity-30 font-black uppercase tracking-widest">Draggable</p></div>
     </div>
 
     <div onclick="toggleAI()" class="fixed bottom-8 right-8 w-16 h-16 bg-indigo-600 rounded-full flex items-center justify-center cursor-pointer shadow-2xl z-[1001] hover:scale-110 active:scale-90 transition text-2xl">🤖</div>
 
     <div id="ai-panel">
-        <div class="p-5 bg-indigo-600 font-bold flex justify-between items-center text-sm shadow-lg">
-            <span class="italic tracking-widest uppercase">StudyAI Buddy</span>
-            <button onclick="toggleAI()" class="text-xl">×</button>
-        </div>
+        <div class="p-5 bg-indigo-600 font-bold flex justify-between items-center text-sm shadow-lg"><span>StudyAI Buddy</span><button onclick="toggleAI()" class="text-xl">×</button></div>
         <div id="ai-messages" class="flex-1 p-5 overflow-y-auto text-xs space-y-4 bg-slate-950"></div>
         <div class="p-4 bg-slate-900 flex space-x-3 border-t border-white/5">
-            <input id="ai-input" placeholder="Ask AI a question..." class="flex-1 bg-white/5 p-3 rounded-xl outline-none text-[11px] focus:border-indigo-500 border border-transparent transition">
+            <input id="ai-input" placeholder="Ask AI..." class="flex-1 bg-white/5 p-3 rounded-xl outline-none text-[11px] focus:border-indigo-500 border border-transparent transition">
             <button onclick="askAI()" class="text-indigo-400 font-black text-[11px] uppercase tracking-widest">Ask</button>
         </div>
     </div>
 
     <div id="whiteboardContainer">
-        <div class="absolute top-6 right-6 flex space-x-4 z-20">
-            <button onclick="clearWhiteboard()" class="bg-red-500 text-white px-8 py-2 rounded-2xl font-black text-xs shadow-xl uppercase">Clear Board</button>
+        <div class="absolute top-6 right-6 flex space-x-4">
+            <button onclick="clearWhiteboard()" class="bg-red-500 text-white px-8 py-2 rounded-2xl font-black text-xs shadow-xl uppercase">Clear</button>
             <button onclick="toggleWhiteboard()" class="bg-slate-800 text-white px-8 py-2 rounded-2xl font-black text-xs uppercase">Close</button>
         </div>
         <canvas id="wbCanvas" class="w-full h-full cursor-crosshair"></canvas>
     </div>
 
     <form id="chatForm" class="p-8 bg-slate-900/95 border-t border-white/5 flex items-center space-x-6">
-        <input id="messageInput" placeholder="Message your study group..." autocomplete="off" class="flex-1 bg-white/5 border border-white/10 rounded-[2rem] px-8 py-5 outline-none focus:border-indigo-500 transition-all shadow-inner">
-        <button class="bg-indigo-600 px-12 py-5 rounded-[2rem] font-black text-white hover:bg-indigo-500 transition-all shadow-xl shadow-indigo-500/20 uppercase italic tracking-widest">Send</button>
+        <input id="messageInput" placeholder="Message classmates..." autocomplete="off" class="flex-1 bg-white/5 border border-white/10 rounded-[2rem] px-8 py-5 outline-none focus:border-indigo-500 transition shadow-inner">
+        <button class="bg-indigo-600 px-12 py-5 rounded-[2rem] font-black text-white hover:bg-indigo-500 transition uppercase italic tracking-widest shadow-xl shadow-indigo-500/20">Send</button>
     </form>
 
     <script>
@@ -88,167 +69,92 @@
     const myPeer = new Peer(undefined, { host: '0.peerjs.com', port: 443, secure: true }); 
 
     const videoGrid = document.getElementById('video-grid');
-    let localStream, isVideoOn = false, isMicOn = false;
-    let myVideo = document.createElement('video');
+    let localStream, isVideoOn = false, myVideo = document.createElement('video');
     myVideo.muted = true; myVideo.id = "my-local-camera";
 
-    if(!username || !room) {
-        location.href = 'dashboard.html';
-    } else {
-        document.getElementById('roomTitle').textContent = room;
-        socket.emit('join room', { username, room });
-    }
+    if(!username || !room) location.href = 'dashboard.html';
+    else { document.getElementById('roomTitle').textContent = room; socket.emit('join room', { username, room }); }
 
-    // --- DRAGGABLE WINDOW LOGIC ---
+    // --- DRAGGABLE ---
     let isDragging = false, offX, offY;
-    videoGrid.onmousedown = e => {
-        if(e.target.tagName === 'VIDEO') return; 
-        isDragging = true;
-        offX = e.clientX - videoGrid.offsetLeft;
-        offY = e.clientY - videoGrid.offsetTop;
-    };
-    document.onmousemove = e => {
-        if (!isDragging) return;
-        videoGrid.style.left = (e.clientX - offX) + 'px';
-        videoGrid.style.top = (e.clientY - offY) + 'px';
-        videoGrid.style.right = 'auto'; 
-    };
+    videoGrid.onmousedown = e => { if(e.target.tagName === 'VIDEO') return; isDragging = true; offX = e.clientX - videoGrid.offsetLeft; offY = e.clientY - videoGrid.offsetTop; };
+    document.onmousemove = e => { if (!isDragging) return; videoGrid.style.left = (e.clientX - offX) + 'px'; videoGrid.style.top = (e.clientY - offY) + 'px'; videoGrid.style.right = 'auto'; };
     document.onmouseup = () => isDragging = false;
 
-    // --- VIDEO & PEER LOGIC ---
+    // --- MEDIA ---
     myPeer.on('call', call => {
         call.answer(localStream);
         const video = document.createElement('video');
         video.id = call.peer;
-        call.on('stream', userStream => {
-            if(!document.getElementById(call.peer)) addVideoStream(video, userStream);
-        });
+        call.on('stream', s => { if(!document.getElementById(call.peer)) addVideoStream(video, s); });
     });
 
-    socket.on('user-connected', userId => {
-        if(localStream) {
-            const call = myPeer.call(userId, localStream);
-            const video = document.createElement('video');
-            video.id = userId;
-            call.on('stream', userStream => {
-                if(!document.getElementById(userId)) addVideoStream(video, userStream);
-            });
-        }
-    });
+    socket.on('user-connected', userId => { if(localStream) connectToNewUser(userId, localStream); });
 
     async function toggleVideo() {
         if(!isVideoOn) {
             try {
                 localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                if(!isMicOn) localStream.getAudioTracks()[0].enabled = false;
                 myVideo.srcObject = localStream;
                 if(!document.getElementById('my-local-camera')) addVideoStream(myVideo, localStream);
                 socket.emit('user-joined-media', { userId: myPeer.id, room });
                 isVideoOn = true;
-                document.getElementById('vBtn').textContent = "📽️ VIDEO ON";
-                document.getElementById('vBtn').classList.add('bg-indigo-600');
-            } catch (err) { alert("Bhai, camera allow kar pehle!"); }
+            } catch (err) { alert("Camera allow karo!"); }
         } else {
             localStream.getTracks().forEach(t => t.stop());
             myVideo.remove(); isVideoOn = false;
-            document.getElementById('vBtn').textContent = "📹 VIDEO OFF";
-            document.getElementById('vBtn').classList.remove('bg-indigo-600');
         }
     }
 
-    function toggleMic() {
-        if(!localStream) return alert("Pehle Camera ON kar!");
-        isMicOn = !isMicOn;
-        localStream.getAudioTracks()[0].enabled = isMicOn;
-        document.getElementById('micBtn').textContent = isMicOn ? "🎙️ MIC ON" : "🎤 MIC OFF";
-    }
-
     function addVideoStream(v, s) {
-        v.srcObject = s;
-        v.onloadedmetadata = () => v.play();
+        v.srcObject = s; v.onloadedmetadata = () => v.play();
         v.ondblclick = () => { if(v.requestFullscreen) v.requestFullscreen(); };
         videoGrid.append(v);
     }
 
-    // --- SCREEN SHARING WITH POPUP ---
+    function connectToNewUser(userId, stream) {
+        const call = myPeer.call(userId, stream);
+        const video = document.createElement('video');
+        video.id = userId;
+        call.on('stream', s => { if(!document.getElementById(userId)) addVideoStream(video, s); });
+    }
+
     async function startScreenShare() {
         try {
-            alert("OYE! Jab popup aaye toh 'Share System Audio' checkbox tick kariyo warna aawaz nahi jayegi!");
-            const screenStream = await navigator.mediaDevices.getDisplayMedia({ 
-                video: true, 
-                audio: { echoCancellation: true, noiseSuppression: true } 
-            });
-            
-            const vTrack = screenStream.getVideoTracks()[0];
-            const aTrack = screenStream.getAudioTracks()[0];
-
+            const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
             socket.emit('screen-share-start', { user: username, room });
             myVideo.srcObject = screenStream;
-            myVideo.style.objectFit = "contain"; 
-
-            // Replace tracks for all connected peers
-            for (let id in myPeer.connections) {
-                myPeer.connections[id].forEach(conn => {
-                    const sender = conn.peerConnection.getSenders().find(s => s.track.kind === 'video');
-                    if(sender) sender.replaceTrack(vTrack);
-                });
-            }
-
-            vTrack.onended = () => {
+            screenStream.getVideoTracks()[0].onended = () => {
                 socket.emit('screen-share-stop', { user: username, room });
                 location.reload(); 
             };
         } catch (e) { console.log("Share cancel"); }
     }
 
-    socket.on('notify-share-start', data => { alert(`🔔 DEKH! ${data.user} ne screen share shuru kiya hai!`); });
-    socket.on('notify-share-stop', data => { alert(`${data.user} ka screen share khatam.`); location.reload(); });
+    socket.on('notify-share-start', d => alert(`ALERT: ${d.user} ne screen share shuru kiya!`));
+    socket.on('notify-share-stop', d => alert(`${d.user} ne share band kiya.`));
 
-    // --- CHAT LOGIC ---
-    function appendMsg(data) {
-        const isMe = data.user === username;
+    // --- CHAT & OTHERS ---
+    function appendMsg(d) {
+        const isMe = d.user === username;
         const div = document.createElement('div');
         div.className = `flex ${isMe ? 'justify-end' : 'justify-start'} mb-6`;
-        div.innerHTML = `
-            <div class="${isMe ? 'bg-indigo-600 shadow-xl shadow-indigo-500/20' : 'bg-slate-800'} p-5 rounded-[1.5rem] max-w-sm border border-white/5">
-                <p class="text-[9px] font-black uppercase opacity-50 mb-2 tracking-widest">${data.user}</p>
-                <p class="text-[13px] leading-relaxed">${data.msg}</p>
-            </div>
-        `;
+        div.innerHTML = `<div class="${isMe ? 'bg-indigo-600 shadow-xl shadow-indigo-500/20' : 'bg-slate-800'} p-5 rounded-[1.5rem] max-w-sm border border-white/5"><p class="text-[9px] font-black uppercase opacity-50 mb-2 tracking-widest">${d.user}</p><p class="text-[13px] leading-relaxed">${d.msg}</p></div>`;
         document.getElementById('chatBox').appendChild(div);
         document.getElementById('chatBox').scrollTop = document.getElementById('chatBox').scrollHeight;
     }
 
-    document.getElementById('chatForm').onsubmit = (e) => {
+    document.getElementById('chatForm').onsubmit = e => {
         e.preventDefault();
         const msg = document.getElementById('messageInput').value;
-        if(msg.trim()) {
-            socket.emit('chat message', { user: username, msg, room });
-            document.getElementById('messageInput').value = '';
-        }
+        if(msg.trim()) { socket.emit('chat message', { user: username, msg, room }); document.getElementById('messageInput').value = ''; }
     };
-    socket.on('chat message', data => appendMsg(data));
+    socket.on('chat message', d => appendMsg(d));
     socket.on('load history', h => h.forEach(appendMsg));
-    socket.on('update user list', (users) => {
-        document.getElementById('userList').innerHTML = users.map(u => `
-            <li class="flex items-center space-x-4 bg-white/5 p-4 rounded-2xl border border-white/5">
-                <div class="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_10px_green]"></div>
-                <span class="text-xs font-black uppercase tracking-widest italic">${u.username}</span>
-            </li>`).join('');
-    });
+    socket.on('update user list', u => { document.getElementById('userList').innerHTML = u.map(x => `<li class="flex items-center space-x-4 bg-white/5 p-4 rounded-2xl border border-white/5"><div class="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_10px_green]"></div><span class="text-xs font-black uppercase tracking-widest italic">${x.username}</span></li>`).join(''); });
 
-    async function clearChat() {
-        if(confirm("Bhai, poora chat saaf kar doon?")) {
-            await fetch(`/clear-chat/${room}`, { method: 'DELETE' });
-            document.getElementById('chatBox').innerHTML = '';
-        }
-    }
-
-    // --- AI LOGIC ---
-    function toggleAI() {
-        const p = document.getElementById('ai-panel');
-        p.style.display = p.style.display === 'flex' ? 'none' : 'flex';
-    }
+    async function clearChat() { if(confirm("Clear chat?")) { await fetch(`/clear-chat/${room}`, { method: 'DELETE' }); document.getElementById('chatBox').innerHTML = ''; } }
+    function toggleAI() { const p = document.getElementById('ai-panel'); p.style.display = p.style.display === 'flex' ? 'none' : 'flex'; }
     async function askAI() {
         const input = document.getElementById('ai-input');
         const box = document.getElementById('ai-messages');
@@ -261,23 +167,11 @@
         input.value = ""; box.scrollTop = box.scrollHeight;
     }
 
-    // --- WHITEBOARD LOGIC ---
-    const canvas = document.getElementById('wbCanvas');
-    const ctx = canvas.getContext('2d');
+    const canvas = document.getElementById('wbCanvas'); const ctx = canvas.getContext('2d');
     let drawing = false;
-    function toggleWhiteboard() {
-        const wb = document.getElementById('whiteboardContainer');
-        wb.style.display = wb.style.display === 'block' ? 'none' : 'block';
-        if(wb.style.display === 'block') { canvas.width = canvas.offsetWidth; canvas.height = canvas.offsetHeight; }
-    }
-    canvas.onmousedown = () => drawing = true;
-    canvas.onmouseup = () => { drawing = false; ctx.beginPath(); };
-    canvas.onmousemove = e => {
-        if(!drawing) return;
-        ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.strokeStyle = '#000';
-        ctx.lineTo(e.clientX - canvas.offsetLeft - (window.innerWidth*0.05), e.clientY - canvas.offsetTop - (window.innerHeight*0.05));
-        ctx.stroke();
-    };
+    function toggleWhiteboard() { const wb = document.getElementById('whiteboardContainer'); wb.style.display = wb.style.display === 'block' ? 'none' : 'block'; if(wb.style.display === 'block') { canvas.width = canvas.offsetWidth; canvas.height = canvas.offsetHeight; } }
+    canvas.onmousedown = () => drawing = true; canvas.onmouseup = () => { drawing = false; ctx.beginPath(); };
+    canvas.onmousemove = e => { if(!drawing) return; ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.strokeStyle = '#000'; ctx.lineTo(e.clientX - canvas.offsetLeft - (window.innerWidth*0.05), e.clientY - canvas.offsetTop - (window.innerHeight*0.05)); ctx.stroke(); };
     function clearWhiteboard() { ctx.clearRect(0, 0, canvas.width, canvas.height); }
     </script>
 </body>
