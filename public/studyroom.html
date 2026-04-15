@@ -9,8 +9,18 @@
         :root { --bg-color: #0f172a; --accent-color: #6366f1; --glass: rgba(255, 255, 255, 0.03); }
         body { background: var(--bg-color); color: white; transition: 0.4s; font-family: sans-serif; overflow: hidden; }
         .glass-chat { background: var(--glass); backdrop-filter: blur(10px); border-radius: 1.5rem; border: 1px solid rgba(255, 255, 255, 0.05); }
-        #video-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
-        video { width: 100%; height: 110px; background: black; border-radius: 12px; border: 2px solid #6366f1; object-fit: cover; }
+        
+        /* 🛠️ MOVABLE VIDEO GRID STYLES */
+        #video-grid { 
+            position: absolute; top: 80px; right: 20px; width: 220px; 
+            display: flex; flex-direction: column; gap: 10px; 
+            z-index: 50; cursor: grab; background: rgba(0,0,0,0.4); 
+            padding: 10px; border-radius: 15px; backdrop-filter: blur(5px);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        #video-grid:active { cursor: grabbing; }
+        video { width: 100%; height: 130px; background: #000; border-radius: 10px; border: 2px solid #6366f1; object-fit: cover; }
+        
         #ai-btn { position: fixed; bottom: 25px; right: 25px; z-index: 1000; background: #6366f1; width: 60px; height: 60px; border-radius: 50%; display: flex; justify-content: center; align-items: center; cursor: pointer; font-size: 30px; box-shadow: 0 10px 20px rgba(0,0,0,0.3); }
         #ai-panel { display: none; position: fixed; bottom: 100px; right: 25px; width: 320px; height: 450px; background: #1e293b; border: 1px solid #6366f1; border-radius: 20px; flex-direction: column; z-index: 1000; overflow: hidden; }
         #whiteboardContainer { display: none; position: fixed; inset: 5%; background: white; z-index: 100; border-radius: 2rem; box-shadow: 0 0 50px rgba(0,0,0,0.5); }
@@ -38,7 +48,8 @@
             <ul id="userList" class="space-y-3"></ul>
         </div>
         <div id="chatBox" class="flex-1 p-8 overflow-y-auto space-y-6 flex flex-col"></div>
-        <div id="video-grid" class="absolute top-4 right-4 w-60 pointer-events-none"></div>
+        
+        <div id="video-grid"><p class="text-center text-[10px] font-bold text-white/50 m-0">DRAG ME</p></div>
     </div>
 
     <div id="ai-btn" onclick="toggleAI()">🤖</div>
@@ -73,26 +84,45 @@
     const username = localStorage.getItem('username');
     const room = new URLSearchParams(window.location.search).get('room');
     
-    // --- 🛠️ PEERJS CLOUD FIX ---
     const myPeer = new Peer(undefined, { host: '0.peerjs.com', port: 443, secure: true }); 
 
     const videoGrid = document.getElementById('video-grid');
     let localStream, isVideoOn = false, isMicOn = false, typingTimeout;
     const peers = {};
+    
+    // Sirf ek global video element taaki duplicate na bane
+    let myVideo = document.createElement('video');
+    myVideo.muted = true; 
+    myVideo.id = "my-local-camera";
 
     if(!username || !room) location.href = 'dashboard.html';
-    else {
-        document.getElementById('roomTitle').textContent = room;
-        socket.emit('join room', { username, room });
-    }
+    else { document.getElementById('roomTitle').textContent = room; socket.emit('join room', { username, room }); }
 
-    // --- 📹 VIDEO & VOICE LOGIC ---
+    // --- 🛠️ DRAGGABLE VIDEO GRID LOGIC ---
+    let isDragging = false, offsetX, offsetY;
+    videoGrid.addEventListener('mousedown', e => {
+        isDragging = true;
+        offsetX = e.clientX - videoGrid.getBoundingClientRect().left;
+        offsetY = e.clientY - videoGrid.getBoundingClientRect().top;
+    });
+    document.addEventListener('mousemove', e => {
+        if (!isDragging) return;
+        videoGrid.style.left = `${e.clientX - offsetX}px`;
+        videoGrid.style.top = `${e.clientY - offsetY}px`;
+        videoGrid.style.right = 'auto'; 
+    });
+    document.addEventListener('mouseup', () => isDragging = false);
+
+    // --- 📹 VIDEO / CAMERA FIX ---
     myPeer.on('open', id => console.log('My Peer ID:', id));
 
     myPeer.on('call', call => {
         call.answer(localStream);
         const video = document.createElement('video');
-        call.on('stream', userStream => addVideoStream(video, userStream));
+        video.id = call.peer; // Duplicate rokne ke liye ID set ki
+        call.on('stream', userStream => {
+            if(!document.getElementById(call.peer)) addVideoStream(video, userStream);
+        });
     });
 
     socket.on('user-connected', userId => {
@@ -105,24 +135,26 @@
                 localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                 if(!isMicOn) localStream.getAudioTracks()[0].enabled = false;
                 
-                const myVideo = document.createElement('video');
-                myVideo.muted = true;
-                addVideoStream(myVideo, localStream);
+                myVideo.srcObject = localStream;
+                if(!document.getElementById('my-local-camera')) addVideoStream(myVideo, localStream);
 
                 socket.emit('user-joined-media', { userId: myPeer.id, room });
-
                 isVideoOn = true;
                 document.getElementById('vBtn').textContent = "📽️ ON";
-            } catch (err) { alert("Please allow Camera/Mic access!"); }
+                document.getElementById('vBtn').classList.add('bg-blue-600');
+            } catch (err) { alert("Please allow Camera access!"); }
         } else {
-            localStream.getVideoTracks()[0].enabled = false;
+            // CAMERA COMPLETELY OFF KAISE KAREIN
+            localStream.getTracks().forEach(track => track.stop()); // Hardware band
+            myVideo.remove(); // UI se gayab
             isVideoOn = false;
             document.getElementById('vBtn').textContent = "📹 Video";
+            document.getElementById('vBtn').classList.remove('bg-blue-600');
         }
     }
 
     function toggleMic() {
-        if(!localStream) return alert("Pehle Video ON karo!");
+        if(!localStream) return alert("Pehle Video ON karo bhai!");
         isMicOn = !isMicOn;
         localStream.getAudioTracks()[0].enabled = isMicOn;
         document.getElementById('micBtn').textContent = isMicOn ? "🎙️ ON" : "🎤 Voice";
@@ -132,7 +164,10 @@
     function connectToNewUser(userId, stream) {
         const call = myPeer.call(userId, stream);
         const video = document.createElement('video');
-        call.on('stream', userStream => addVideoStream(video, userStream));
+        video.id = userId;
+        call.on('stream', userStream => {
+            if(!document.getElementById(userId)) addVideoStream(video, userStream);
+        });
         call.on('close', () => video.remove());
         peers[userId] = call;
     }
@@ -140,18 +175,48 @@
     function addVideoStream(v, s) {
         v.srcObject = s;
         v.addEventListener('loadedmetadata', () => v.play());
-        v.style.pointerEvents = "auto";
         videoGrid.append(v);
     }
 
-    // --- 🖥️ SCREEN SHARE LOGIC ---
+    // --- 🖥️ SCREEN SHARE FIX (REPLACE TRACK) ---
     async function startScreenShare() {
         try {
             const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-            const video = document.createElement('video');
-            addVideoStream(video, screenStream);
-            socket.emit('user-joined-media', { userId: myPeer.id, room });
-            screenStream.getVideoTracks()[0].onended = () => video.remove();
+            const screenTrack = screenStream.getVideoTracks()[0];
+
+            // 1. Apni UI pe screen dikhao
+            if(myVideo) myVideo.srcObject = screenStream;
+
+            // 2. Doston ke PC par video ki jagah screen bhej do (Replace Track)
+            for (let peerId in myPeer.connections) {
+                myPeer.connections[peerId].forEach(conn => {
+                    if (conn.peerConnection) {
+                        let sender = conn.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+                        if (sender) sender.replaceTrack(screenTrack);
+                    }
+                });
+            }
+
+            // 3. Jab "Stop Sharing" dabaye, wapas camera chala do
+            screenTrack.onended = async () => {
+                if (isVideoOn) {
+                    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                    if(!isMicOn) localStream.getAudioTracks()[0].enabled = false;
+                    myVideo.srcObject = localStream;
+                    let camTrack = localStream.getVideoTracks()[0];
+                    
+                    for (let peerId in myPeer.connections) {
+                        myPeer.connections[peerId].forEach(conn => {
+                            if (conn.peerConnection) {
+                                let sender = conn.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+                                if (sender) sender.replaceTrack(camTrack);
+                            }
+                        });
+                    }
+                } else {
+                    myVideo.srcObject = null;
+                }
+            };
         } catch (err) { console.log("Share cancel"); }
     }
 
