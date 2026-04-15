@@ -35,17 +35,30 @@ mongoose.connect(process.env.MONGO_URI || 'mongodb://Admin:1441@ac-kiqfzih-shard
     .then(() => console.log('✅ DB Connected'))
     .catch(err => console.error(err));
 
-// AI Assistant Route
+// AI Assistant
 app.post('/ask-ai', async (req, res) => {
     try {
-        const result = await model.generateContent(`Bhai, tu ek friendly study assistant hai. Sawal ka short jawab de: ${req.body.prompt}`);
+        const result = await model.generateContent(`Bhai, tu ek friendly study assistant hai. Short jawab de: ${req.body.prompt}`);
         const response = await result.response;
         res.json({ answer: response.text() });
-    } catch (e) { res.json({ answer: "AI thoda busy hai bhai!" }); }
+    } catch (e) { res.json({ answer: "AI busy hai bhai!" }); }
 });
 
-// Auth Routes
+// --- AUTH ROUTES ---
 app.get('/', (req, res) => res.redirect('/login.html'));
+
+app.post('/register', async (req, res) => {
+    try {
+        const { username, email, password } = req.body;
+        const exists = await User.findOne({ email });
+        if (exists) return res.status(400).json({ message: "Email already exists!" });
+        
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const newUser = new User({ username, email, password: hashedPassword });
+        await newUser.save();
+        res.json({ message: "Success! Ab login karo." });
+    } catch (err) { res.status(500).json({ message: "Server Error!" }); }
+});
 
 app.post('/login', async (req, res) => {
     const user = await User.findOne({ email: req.body.email });
@@ -56,11 +69,19 @@ app.post('/login', async (req, res) => {
     }
 });
 
+// Clear Chat Route
+app.delete('/clear-chat/:room', async (req, res) => {
+    try {
+        await Message.deleteMany({ room: req.params.room });
+        res.json({ success: true });
+    } catch (err) { res.status(500).send(err); }
+});
+
 app.post('/upload', upload.single('studyFile'), (req, res) => {
     res.json({ filePath: `/uploads/${req.file.filename}`, fileName: req.file.originalname });
 });
 
-// Sockets for Live Chat & Rooms
+// Sockets
 const onlineUsers = {};
 io.on('connection', (socket) => {
     socket.on('join room', async (data) => {
@@ -76,9 +97,6 @@ io.on('connection', (socket) => {
         io.to(data.room).emit('chat message', data);
     });
 
-    socket.on('typing', (d) => socket.to(d.room).emit('display typing', d));
-    socket.on('stop typing', (d) => socket.to(d.room).emit('hide typing', d));
-
     socket.on('user-joined-media', (data) => {
         socket.to(data.room).emit('user-connected', data.userId);
     });
@@ -92,8 +110,5 @@ io.on('connection', (socket) => {
     });
 });
 
-// 🚀 Start Server (SIRF EK BAAR LISTEN KAREGA)
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-    console.log(`🚀 Server running on port ${PORT}`);
-});
+server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));

@@ -7,10 +7,9 @@
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         :root { --bg-color: #0f172a; --accent-color: #6366f1; --glass: rgba(255, 255, 255, 0.03); }
-        body { background: var(--bg-color); color: white; transition: 0.4s; font-family: sans-serif; overflow: hidden; }
+        body { background: var(--bg-color); color: white; font-family: sans-serif; overflow: hidden; }
         .glass-chat { background: var(--glass); backdrop-filter: blur(10px); border-radius: 1.5rem; border: 1px solid rgba(255, 255, 255, 0.05); }
         
-        /* 🛠️ MOVABLE VIDEO GRID STYLES */
         #video-grid { 
             position: absolute; top: 80px; right: 20px; width: 220px; 
             display: flex; flex-direction: column; gap: 10px; 
@@ -18,12 +17,12 @@
             padding: 10px; border-radius: 15px; backdrop-filter: blur(5px);
             border: 1px solid rgba(255,255,255,0.1);
         }
-        #video-grid:active { cursor: grabbing; }
-        video { width: 100%; height: 130px; background: #000; border-radius: 10px; border: 2px solid #6366f1; object-fit: cover; }
-        
-        #ai-btn { position: fixed; bottom: 25px; right: 25px; z-index: 1000; background: #6366f1; width: 60px; height: 60px; border-radius: 50%; display: flex; justify-content: center; align-items: center; cursor: pointer; font-size: 30px; box-shadow: 0 10px 20px rgba(0,0,0,0.3); }
+        video { width: 100%; height: 130px; background: #000; border-radius: 10px; border: 2px solid #6366f1; object-fit: cover; transition: 0.3s; }
+        video:fullscreen { object-fit: contain; }
+
+        #ai-btn { position: fixed; bottom: 25px; right: 25px; z-index: 1000; background: #6366f1; width: 60px; height: 60px; border-radius: 50%; display: flex; justify-content: center; align-items: center; cursor: pointer; font-size: 30px; }
         #ai-panel { display: none; position: fixed; bottom: 100px; right: 25px; width: 320px; height: 450px; background: #1e293b; border: 1px solid #6366f1; border-radius: 20px; flex-direction: column; z-index: 1000; overflow: hidden; }
-        #whiteboardContainer { display: none; position: fixed; inset: 5%; background: white; z-index: 100; border-radius: 2rem; box-shadow: 0 0 50px rgba(0,0,0,0.5); }
+        #whiteboardContainer { display: none; position: fixed; inset: 5%; background: white; z-index: 100; border-radius: 2rem; }
         canvas { cursor: crosshair; width: 100%; height: 100%; }
     </style>
 </head>
@@ -39,6 +38,7 @@
             <button id="micBtn" onclick="toggleMic()" class="text-[10px] bg-green-500/20 text-green-400 border border-green-400/20 px-3 py-1.5 rounded-full font-bold uppercase">🎤 Voice</button>
             <button onclick="startScreenShare()" class="text-[10px] bg-indigo-500/20 text-indigo-400 border border-indigo-400/20 px-3 py-1.5 rounded-full font-bold uppercase">🖥️ Share</button>
             <button onclick="toggleWhiteboard()" class="text-[10px] bg-purple-500/20 text-purple-400 border border-purple-400/20 px-3 py-1.5 rounded-full font-bold uppercase">🎨 Board</button>
+            <button onclick="clearChat()" class="text-[10px] bg-red-500/20 text-red-500 border border-red-500/20 px-3 py-1.5 rounded-full font-bold uppercase">🗑️ Clear</button>
         </div>
     </header>
 
@@ -48,179 +48,170 @@
             <ul id="userList" class="space-y-3"></ul>
         </div>
         <div id="chatBox" class="flex-1 p-8 overflow-y-auto space-y-6 flex flex-col"></div>
-        
-        <div id="video-grid"><p class="text-center text-[10px] font-bold text-white/50 m-0">DRAG ME</p></div>
+        <div id="video-grid"><p class="text-center text-[8px] opacity-30">DRAGGABLE</p></div>
     </div>
 
     <div id="ai-btn" onclick="toggleAI()">🤖</div>
     <div id="ai-panel">
-        <div class="p-4 bg-indigo-600 font-bold flex justify-between"><span>StudyAI Assistant</span><button onclick="toggleAI()">×</button></div>
+        <div class="p-4 bg-indigo-600 font-bold flex justify-between"><span>StudyAI</span><button onclick="toggleAI()">×</button></div>
         <div id="ai-messages" class="flex-1 p-4 overflow-y-auto text-sm space-y-2 bg-slate-950"></div>
         <div class="p-3 border-t border-white/10 flex space-x-2">
-            <input id="ai-input" placeholder="Ask AI..." class="flex-1 bg-white/5 p-2 rounded text-xs outline-none">
+            <input id="ai-input" placeholder="Ask..." class="flex-1 bg-white/5 p-2 rounded text-xs outline-none">
             <button onclick="askAI()" class="text-indigo-400 font-bold text-xs uppercase">Ask</button>
         </div>
     </div>
 
     <div id="whiteboardContainer">
         <div class="absolute top-4 right-4 z-20 flex space-x-2">
-            <button onclick="clearWhiteboard()" class="bg-red-500 text-white px-4 py-1 rounded-full text-xs font-bold shadow-lg">Clear</button>
+            <button onclick="clearWhiteboard()" class="bg-red-500 text-white px-4 py-1 rounded-full text-xs font-bold">Clear</button>
             <button onclick="toggleWhiteboard()" class="bg-slate-800 text-white px-4 py-1 rounded-full text-xs font-bold">Close</button>
         </div>
         <canvas id="wbCanvas"></canvas>
     </div>
 
-    <div id="typingIndicator" class="px-6 py-1 text-[10px] italic text-indigo-400 h-4"></div>
-
     <form id="chatForm" class="p-6 bg-slate-900/90 border-t border-white/5 flex items-center space-x-4">
         <input type="file" id="fileInput" class="hidden">
-        <button type="button" onclick="document.getElementById('fileInput').click()" class="text-2xl opacity-50 hover:opacity-100 transition">📎</button>
-        <input id="messageInput" placeholder="Message friends..." autocomplete="off" class="flex-1 bg-white/5 border border-white/10 rounded-2xl px-6 py-4 outline-none">
-        <button class="bg-indigo-600 px-8 py-4 rounded-2xl font-black text-white">SEND</button>
+        <button type="button" onclick="document.getElementById('fileInput').click()" class="text-2xl opacity-50">📎</button>
+        <input id="messageInput" placeholder="Type..." autocomplete="off" class="flex-1 bg-white/5 border border-white/10 rounded-2xl px-6 py-4 outline-none">
+        <button class="bg-indigo-600 px-8 py-4 rounded-2xl font-black">SEND</button>
     </form>
 
     <script>
     const socket = io();
     const username = localStorage.getItem('username');
     const room = new URLSearchParams(window.location.search).get('room');
-    
     const myPeer = new Peer(undefined, { host: '0.peerjs.com', port: 443, secure: true }); 
 
     const videoGrid = document.getElementById('video-grid');
-    let localStream, isVideoOn = false, isMicOn = false, typingTimeout;
-    const peers = {};
-    
-    // Sirf ek global video element taaki duplicate na bane
+    let localStream, isVideoOn = false, isMicOn = false;
     let myVideo = document.createElement('video');
-    myVideo.muted = true; 
-    myVideo.id = "my-local-camera";
+    myVideo.muted = true; myVideo.id = "my-local-camera";
 
     if(!username || !room) location.href = 'dashboard.html';
     else { document.getElementById('roomTitle').textContent = room; socket.emit('join room', { username, room }); }
 
-    // --- 🛠️ DRAGGABLE VIDEO GRID LOGIC ---
-    let isDragging = false, offsetX, offsetY;
-    videoGrid.addEventListener('mousedown', e => {
-        isDragging = true;
-        offsetX = e.clientX - videoGrid.getBoundingClientRect().left;
-        offsetY = e.clientY - videoGrid.getBoundingClientRect().top;
-    });
-    document.addEventListener('mousemove', e => {
-        if (!isDragging) return;
-        videoGrid.style.left = `${e.clientX - offsetX}px`;
-        videoGrid.style.top = `${e.clientY - offsetY}px`;
-        videoGrid.style.right = 'auto'; 
-    });
-    document.addEventListener('mouseup', () => isDragging = false);
+    // Draggable logic
+    let isDragging = false, offX, offY;
+    videoGrid.onmousedown = e => { isDragging = true; offX = e.clientX - videoGrid.offsetLeft; offY = e.clientY - videoGrid.offsetTop; };
+    document.onmousemove = e => { if (!isDragging) return; videoGrid.style.left = (e.clientX - offX) + 'px'; videoGrid.style.top = (e.clientY - offY) + 'px'; videoGrid.style.right = 'auto'; };
+    document.onmouseup = () => isDragging = false;
 
-    // --- 📹 VIDEO / CAMERA FIX ---
-    myPeer.on('open', id => console.log('My Peer ID:', id));
-
+    // Media Logic
     myPeer.on('call', call => {
         call.answer(localStream);
         const video = document.createElement('video');
-        video.id = call.peer; // Duplicate rokne ke liye ID set ki
-        call.on('stream', userStream => {
-            if(!document.getElementById(call.peer)) addVideoStream(video, userStream);
-        });
+        video.id = call.peer;
+        call.on('stream', userStream => { if(!document.getElementById(call.peer)) addVideoStream(video, userStream); });
     });
 
-    socket.on('user-connected', userId => {
-        if(localStream) connectToNewUser(userId, localStream);
-    });
+    socket.on('user-connected', userId => { if(localStream) connectToNewUser(userId, localStream); });
 
     async function toggleVideo() {
         if(!isVideoOn) {
             try {
                 localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                 if(!isMicOn) localStream.getAudioTracks()[0].enabled = false;
-                
                 myVideo.srcObject = localStream;
                 if(!document.getElementById('my-local-camera')) addVideoStream(myVideo, localStream);
-
                 socket.emit('user-joined-media', { userId: myPeer.id, room });
                 isVideoOn = true;
                 document.getElementById('vBtn').textContent = "📽️ ON";
-                document.getElementById('vBtn').classList.add('bg-blue-600');
-            } catch (err) { alert("Please allow Camera access!"); }
+            } catch (err) { alert("Allow Camera!"); }
         } else {
-            // CAMERA COMPLETELY OFF KAISE KAREIN
-            localStream.getTracks().forEach(track => track.stop()); // Hardware band
-            myVideo.remove(); // UI se gayab
-            isVideoOn = false;
+            localStream.getTracks().forEach(t => t.stop());
+            myVideo.remove(); isVideoOn = false;
             document.getElementById('vBtn').textContent = "📹 Video";
-            document.getElementById('vBtn').classList.remove('bg-blue-600');
         }
     }
 
     function toggleMic() {
-        if(!localStream) return alert("Pehle Video ON karo bhai!");
+        if(!localStream) return alert("ON Video first!");
         isMicOn = !isMicOn;
         localStream.getAudioTracks()[0].enabled = isMicOn;
         document.getElementById('micBtn').textContent = isMicOn ? "🎙️ ON" : "🎤 Voice";
-        document.getElementById('micBtn').classList.toggle('bg-green-600');
     }
 
     function connectToNewUser(userId, stream) {
         const call = myPeer.call(userId, stream);
         const video = document.createElement('video');
         video.id = userId;
-        call.on('stream', userStream => {
-            if(!document.getElementById(userId)) addVideoStream(video, userStream);
-        });
+        call.on('stream', userStream => { if(!document.getElementById(userId)) addVideoStream(video, userStream); });
         call.on('close', () => video.remove());
-        peers[userId] = call;
     }
 
     function addVideoStream(v, s) {
         v.srcObject = s;
-        v.addEventListener('loadedmetadata', () => v.play());
+        v.onloadedmetadata = () => v.play();
+        v.ondblclick = () => { if(v.requestFullscreen) v.requestFullscreen(); };
         videoGrid.append(v);
     }
 
-    // --- 🖥️ SCREEN SHARE FIX (REPLACE TRACK) ---
     async function startScreenShare() {
         try {
-            const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-            const screenTrack = screenStream.getVideoTracks()[0];
+            const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+            const vTrack = screenStream.getVideoTracks()[0];
+            const aTrack = screenStream.getAudioTracks()[0];
 
-            // 1. Apni UI pe screen dikhao
-            if(myVideo) myVideo.srcObject = screenStream;
+            myVideo.srcObject = screenStream;
+            myVideo.style.objectFit = "contain";
 
-            // 2. Doston ke PC par video ki jagah screen bhej do (Replace Track)
-            for (let peerId in myPeer.connections) {
-                myPeer.connections[peerId].forEach(conn => {
-                    if (conn.peerConnection) {
-                        let sender = conn.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
-                        if (sender) sender.replaceTrack(screenTrack);
+            for (let id in myPeer.connections) {
+                myPeer.connections[id].forEach(conn => {
+                    let vSender = conn.peerConnection.getSenders().find(s => s.track.kind === 'video');
+                    if(vSender) vSender.replaceTrack(vTrack);
+                    if(aTrack) {
+                        let aSender = conn.peerConnection.getSenders().find(s => s.track.kind === 'audio');
+                        if(aSender) aSender.replaceTrack(aTrack);
                     }
                 });
             }
-
-            // 3. Jab "Stop Sharing" dabaye, wapas camera chala do
-            screenTrack.onended = async () => {
-                if (isVideoOn) {
-                    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                    if(!isMicOn) localStream.getAudioTracks()[0].enabled = false;
-                    myVideo.srcObject = localStream;
-                    let camTrack = localStream.getVideoTracks()[0];
-                    
-                    for (let peerId in myPeer.connections) {
-                        myPeer.connections[peerId].forEach(conn => {
-                            if (conn.peerConnection) {
-                                let sender = conn.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
-                                if (sender) sender.replaceTrack(camTrack);
-                            }
-                        });
-                    }
-                } else {
-                    myVideo.srcObject = null;
-                }
-            };
-        } catch (err) { console.log("Share cancel"); }
+            vTrack.onended = () => location.reload();
+        } catch (e) {}
     }
 
-    // --- WHITEBOARD & CHAT ---
+    // Chat & AI
+    socket.on('update user list', (users) => {
+        document.getElementById('userList').innerHTML = users.map(u => `<li class="text-sm font-bold bg-white/5 p-2 rounded">● ${u.username}</li>`).join('');
+    });
+
+    function append(data) {
+        const isMe = data.user === username;
+        const div = document.createElement('div');
+        div.className = `flex ${isMe ? 'justify-end' : 'justify-start'} mb-2`;
+        div.innerHTML = `<div class="${isMe ? 'bg-indigo-600' : 'glass-chat'} p-3 rounded-2xl max-w-xs"><p class="text-[8px] opacity-50">${data.user}</p><p class="text-sm">${data.msg}</p></div>`;
+        document.getElementById('chatBox').appendChild(div);
+        document.getElementById('chatBox').scrollTop = document.getElementById('chatBox').scrollHeight;
+    }
+
+    document.getElementById('chatForm').onsubmit = (e) => {
+        e.preventDefault();
+        const msg = document.getElementById('messageInput').value;
+        if(msg) { socket.emit('chat message', { user: username, msg, room }); document.getElementById('messageInput').value = ''; }
+    };
+    socket.on('load history', msgs => msgs.forEach(append));
+    socket.on('chat message', data => append(data));
+
+    async function clearChat() {
+        if(confirm("Delete all messages?")) {
+            await fetch(`/clear-chat/${room}`, { method: 'DELETE' });
+            document.getElementById('chatBox').innerHTML = '';
+        }
+    }
+
+    function toggleAI() { const p = document.getElementById('ai-panel'); p.style.display = p.style.display === 'flex' ? 'none' : 'flex'; }
+    async function askAI() {
+        const input = document.getElementById('ai-input');
+        const box = document.getElementById('ai-messages');
+        const val = input.value; if(!val) return;
+        box.innerHTML += `<div class="text-xs text-white mb-2">You: ${val}</div>`;
+        input.value = "Thinking...";
+        const res = await fetch('/ask-ai', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: val }) });
+        const d = await res.json();
+        box.innerHTML += `<div class="text-xs text-indigo-300 mb-2">AI: ${d.answer}</div>`;
+        input.value = ""; box.scrollTop = box.scrollHeight;
+    }
+    
+    // Whiteboard
     const canvas = document.getElementById('wbCanvas');
     const ctx = canvas.getContext('2d');
     let drawing = false;
@@ -233,70 +224,9 @@
     canvas.onmouseup = () => { drawing = false; ctx.beginPath(); };
     canvas.onmousemove = (e) => {
         if(!drawing) return;
-        ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.strokeStyle = '#000';
-        ctx.lineTo(e.clientX - canvas.offsetLeft - (window.innerWidth*0.05), e.clientY - canvas.offsetTop - (window.innerHeight*0.05));
-        ctx.stroke();
+        ctx.lineWidth = 3; ctx.lineTo(e.clientX - canvas.offsetLeft - (window.innerWidth*0.05), e.clientY - canvas.offsetTop - (window.innerHeight*0.05)); ctx.stroke();
     };
     function clearWhiteboard() { ctx.clearRect(0, 0, canvas.width, canvas.height); }
-
-    const messageInput = document.getElementById('messageInput');
-    messageInput.addEventListener('keypress', () => {
-        socket.emit('typing', { user: username, room: room });
-        clearTimeout(typingTimeout);
-        typingTimeout = setTimeout(() => socket.emit('stop typing', { room: room }), 2000);
-    });
-    socket.on('display typing', d => document.getElementById('typingIndicator').textContent = `${d.user} is typing...`);
-    socket.on('hide typing', () => document.getElementById('typingIndicator').textContent = '');
-
-    socket.on('update user list', (users) => {
-        document.getElementById('userList').innerHTML = users.map(u => `
-            <li class="flex items-center space-x-3 text-sm font-bold bg-white/5 p-3 rounded-xl border border-white/5">
-                <div class="w-2 h-2 bg-green-500 rounded-full shadow-[0_0_8px_green] animate-pulse"></div>
-                <span>${u.username}</span>
-            </li>`).join('');
-    });
-
-    function append(data) {
-        const isMe = data.user === username;
-        const div = document.createElement('div');
-        div.className = `flex ${isMe ? 'justify-end' : 'justify-start'} items-end space-x-3 mb-2`;
-        div.innerHTML = `
-            ${!isMe ? `<img src="https://ui-avatars.com/api/?name=${data.user}&background=random&color=fff&bold=true" class="w-8 h-8 rounded-full">` : ''}
-            <div class="${isMe ? 'bg-indigo-600' : 'glass-chat'} p-4 rounded-2xl max-w-sm shadow-xl">
-                <p class="text-[9px] font-black uppercase opacity-50 mb-1">${data.user}</p>
-                <p class="text-sm">${data.msg}</p>
-            </div>
-            ${isMe ? `<img src="https://ui-avatars.com/api/?name=${data.user}&background=random&color=fff&bold=true" class="w-8 h-8 rounded-full">` : ''}
-        `;
-        document.getElementById('chatBox').appendChild(div);
-        document.getElementById('chatBox').scrollTop = document.getElementById('chatBox').scrollHeight;
-    }
-
-    document.getElementById('chatForm').onsubmit = (e) => {
-        e.preventDefault();
-        if(messageInput.value.trim()) { socket.emit('chat message', { user: username, msg: messageInput.value, room: room }); messageInput.value = ''; }
-    };
-    socket.on('load history', msgs => msgs.forEach(append));
-    socket.on('chat message', data => append(data));
-
-    function toggleAI() { const p = document.getElementById('ai-panel'); p.style.display = p.style.display === 'flex' ? 'none' : 'flex'; }
-    async function askAI() {
-        const input = document.getElementById('ai-input');
-        const box = document.getElementById('ai-messages');
-        const val = input.value; if(!val) return;
-        box.innerHTML += `<div class="bg-indigo-600 p-2 rounded ml-8 mb-2 text-xs text-white">You: ${val}</div>`;
-        input.value = "Thinking...";
-        const res = await fetch('/ask-ai', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: val }) });
-        const d = await res.json();
-        box.innerHTML += `<div class="bg-slate-800 p-2 rounded mr-8 mb-2 text-xs text-indigo-300">AI: ${d.answer}</div>`;
-        input.value = ""; box.scrollTop = box.scrollHeight;
-    }
-    document.getElementById('fileInput').onchange = async (e) => {
-        const fd = new FormData(); fd.append('studyFile', e.target.files[0]);
-        const res = await fetch('/upload', { method: 'POST', body: fd });
-        const d = await res.json();
-        socket.emit('chat message', { user: username, msg: `Shared: <a href="${d.filePath}" target="_blank" class="underline font-bold text-indigo-400">📄 ${d.fileName}</a>`, room: room });
-    };
     </script>
 </body>
 </html>
