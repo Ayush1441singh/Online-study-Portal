@@ -2,185 +2,120 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>StudyPortal - Pro Dashboard</title>
+    <title>Dashboard - StudyPortal</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        body { background: #0f172a; color: white; font-family: 'Inter', sans-serif; overflow-x: hidden; }
-        .glass-card { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 2rem; transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-        .glass-card:hover { transform: translateY(-8px); border-color: #6366f1; box-shadow: 0 20px 40px rgba(0,0,0,0.4); }
-        
-        /* Modal Style for Bio Edit */
-        #editModal { display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(8px); z-index: 100; align-items: center; justify-content: center; }
-        .modal-content { background: #1e293b; border: 1px solid #6366f1; width: 90%; max-width: 450px; padding: 2.5rem; border-radius: 2rem; box-shadow: 0 0 50px rgba(99, 102, 241, 0.3); }
-
-        .room-btn { background: linear-gradient(135deg, #6366f1 0%, #4338ca 100%); transition: 0.3s; }
-        .room-btn:hover { letter-spacing: 1px; filter: brightness(1.2); }
+        body { background: #0f172a; color: white; font-family: sans-serif; }
+        .glass-card { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 2rem; transition: 0.3s; }
+        .glass-card:hover { transform: translateY(-5px); border-color: #6366f1; }
+        #editModal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 100; align-items: center; justify-content: center; }
     </style>
 </head>
-<body class="min-h-screen p-6 md:p-12">
+<body class="p-8">
 
-    <header class="max-w-6xl mx-auto flex justify-between items-center mb-16">
-        <div>
-            <h1 class="text-3xl font-black italic tracking-tighter uppercase">STUDY<span class="text-indigo-500">PORTAL</span></h1>
-            <p class="text-[10px] text-slate-500 font-bold tracking-[0.3em] uppercase">The Future of Learning</p>
-        </div>
-        <button onclick="logout()" class="bg-red-500/10 text-red-500 border border-red-500/20 px-6 py-2 rounded-full text-xs font-bold hover:bg-red-500 hover:text-white transition-all">Logout</button>
+    <header class="max-w-6xl mx-auto flex justify-between items-center mb-12">
+        <h1 class="text-3xl font-black italic tracking-tighter uppercase">STUDY<span class="text-indigo-500">PORTAL</span></h1>
+        <button onclick="logout()" class="bg-red-500/10 text-red-500 px-6 py-2 rounded-full text-xs font-bold border border-red-500/20">Logout</button>
     </header>
 
-    <main class="max-w-6xl mx-auto space-y-10">
-        <div class="glass-card p-8 md:p-12 flex flex-col md:flex-row items-center space-y-6 md:space-y-0 md:space-x-12 relative overflow-hidden">
-            <div class="absolute top-0 right-0 w-64 h-64 bg-indigo-600/10 rounded-full -mr-32 -mt-32 blur-3xl"></div>
-            
+    <main class="max-w-6xl mx-auto space-y-8">
+        <div class="glass-card p-10 flex items-center space-x-10 relative overflow-hidden">
             <div class="relative flex-shrink-0">
-                <img id="profileImg" src="" class="w-40 h-40 rounded-[3rem] object-cover border-4 border-indigo-500/20 shadow-2xl">
-                <button onclick="openModal()" class="absolute -bottom-2 -right-2 bg-indigo-600 w-12 h-12 rounded-2xl flex items-center justify-center border-4 border-[#0f172a] hover:scale-110 active:scale-95 transition-all shadow-xl z-20">
+                <img id="profileImg" src="" class="w-36 h-36 rounded-[2.5rem] object-cover border-4 border-indigo-500/20 shadow-2xl">
+                <button onclick="openModal()" class="absolute -bottom-2 -right-2 bg-indigo-600 w-12 h-12 rounded-2xl flex items-center justify-center border-4 border-[#0f172a] hover:scale-110 transition-all shadow-xl">
                     <i class="fas fa-pencil-alt text-white"></i>
                 </button>
             </div>
-
-            <div class="flex-1 text-center md:text-left z-10">
-                <h2 id="welcomeText" class="text-4xl md:text-6xl font-black italic mb-4 tracking-tight">Loading...</h2>
-                <p id="bioText" class="text-slate-400 text-lg italic mb-6">"Setting up your vibe..."</p>
-                <div class="inline-flex items-center space-x-2 bg-indigo-500/10 px-4 py-2 rounded-xl">
-                    <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                    <span id="userEmailDisplay" class="text-xs font-bold text-indigo-400 uppercase tracking-widest">Email Loading...</span>
-                </div>
+            <div class="flex-1">
+                <h2 id="welcomeText" class="text-5xl font-black italic mb-2 tracking-tight">Loading...</h2>
+                <p id="bioText" class="text-slate-400 text-lg italic mb-4">"Vibe check..."</p>
+                <p id="emailDisp" class="text-[10px] font-bold text-indigo-400 uppercase tracking-widest"></p>
             </div>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div class="glass-card p-10 flex flex-col justify-between h-80 group">
+            <div onclick="joinRoom('Calculus')" class="glass-card p-12 group cursor-pointer h-72 flex flex-col justify-between">
                 <div>
-                    <div class="w-14 h-14 bg-indigo-500/10 rounded-2xl flex items-center justify-center mb-6 group-hover:bg-indigo-600 transition-all">
-                        <i class="fas fa-calculator text-2xl text-indigo-400 group-hover:text-white"></i>
-                    </div>
-                    <h3 class="text-3xl font-black italic mb-2 uppercase">Calculus Room</h3>
-                    <p class="text-slate-500 text-sm font-medium">Password will be sent to your registered email.</p>
+                    <h3 class="text-3xl font-black italic group-hover:text-indigo-400 transition uppercase">Calculus Room</h3>
+                    <p class="text-slate-500 mt-2 font-medium">Secure Entry. Password sent to your email.</p>
                 </div>
-                <button onclick="joinRoom('Calculus')" class="room-btn w-full py-4 rounded-2xl font-black italic uppercase text-sm shadow-lg">Request Access & Join</button>
+                <button class="bg-indigo-600 py-4 rounded-2xl font-black uppercase text-xs italic tracking-widest">Request Access</button>
             </div>
-
-            <div class="glass-card p-10 flex flex-col justify-between h-80 group">
+            <div onclick="joinRoom('Java')" class="glass-card p-12 group cursor-pointer h-72 flex flex-col justify-between">
                 <div>
-                    <div class="w-14 h-14 bg-orange-500/10 rounded-2xl flex items-center justify-center mb-6 group-hover:bg-orange-600 transition-all">
-                        <i class="fab fa-java text-2xl text-orange-400 group-hover:text-white"></i>
-                    </div>
-                    <h3 class="text-3xl font-black italic mb-2 uppercase">Java Masters</h3>
-                    <p class="text-slate-500 text-sm font-medium">Advanced OOPs and Logic hub. Secure entry only.</p>
+                    <h3 class="text-3xl font-black italic group-hover:text-indigo-400 transition uppercase">Java Masters</h3>
+                    <p class="text-slate-500 mt-2 font-medium">OOPs hub. Access code via email.</p>
                 </div>
-                <button onclick="joinRoom('Java')" class="room-btn w-full py-4 rounded-2xl font-black italic uppercase text-sm shadow-lg">Request Access & Join</button>
+                <button class="bg-indigo-600 py-4 rounded-2xl font-black uppercase text-xs italic tracking-widest">Request Access</button>
             </div>
         </div>
     </main>
 
     <div id="editModal">
-        <div class="modal-content">
-            <h3 class="text-2xl font-black mb-8 italic text-center uppercase tracking-tighter">Update Profile</h3>
-            
-            <div class="space-y-5">
-                <div>
-                    <label class="text-[10px] uppercase font-black text-slate-500 ml-1">Your New Bio</label>
-                    <input id="newBio" type="text" class="w-full bg-slate-900/50 border border-white/10 rounded-xl px-5 py-4 outline-none focus:border-indigo-500 transition-all text-sm">
-                </div>
-                <div>
-                    <label class="text-[10px] uppercase font-black text-slate-500 ml-1">Profile Image URL</label>
-                    <input id="newPic" type="text" placeholder="Paste link here..." class="w-full bg-slate-900/50 border border-white/10 rounded-xl px-5 py-4 outline-none focus:border-indigo-500 transition-all text-sm">
-                </div>
+        <div class="bg-slate-900 p-10 rounded-[2.5rem] border border-indigo-500 w-96 shadow-2xl">
+            <h3 class="text-xl font-black mb-6 italic uppercase text-center">Update Profile</h3>
+            <div class="space-y-4">
+                <input id="newBio" placeholder="Enter new bio..." class="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-sm outline-none focus:border-indigo-500 transition">
+                <input id="newPic" placeholder="New Profile Image URL..." class="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-sm outline-none focus:border-indigo-500 transition">
             </div>
-
-            <div class="flex space-x-4 mt-10">
-                <button onclick="closeModal()" class="flex-1 bg-slate-800 py-4 rounded-xl font-bold text-xs uppercase tracking-widest">Cancel</button>
-                <button onclick="saveProfile()" class="flex-1 bg-indigo-600 py-4 rounded-xl font-bold text-xs uppercase tracking-widest shadow-lg shadow-indigo-500/30">Save Changes</button>
+            <div class="flex space-x-3 mt-8">
+                <button onclick="closeModal()" class="flex-1 text-xs font-bold opacity-50 uppercase tracking-widest">Cancel</button>
+                <button onclick="saveProfile()" class="flex-1 bg-indigo-600 py-4 rounded-2xl text-xs font-bold uppercase tracking-widest">Save</button>
             </div>
         </div>
     </div>
 
     <script>
-        // Data Retrieval
-        const username = localStorage.getItem('username') || "Student";
-        const userEmail = localStorage.getItem('userEmail') || "Not Logged In";
+        const username = localStorage.getItem('username') || "User";
+        const userEmail = localStorage.getItem('userEmail') || "No Email";
 
-        // Initial Setup
         document.getElementById('welcomeText').textContent = `Hello, ${username}!`;
-        document.getElementById('userEmailDisplay').textContent = userEmail;
+        document.getElementById('emailDisp').textContent = userEmail;
+        document.getElementById('profileImg').src = localStorage.getItem('userPic') || `https://ui-avatars.com/api/?name=${username}&background=6366f1&color=fff&size=200&bold=true`;
+        document.getElementById('bioText').textContent = `"${localStorage.getItem('userBio') || "Let's study together!"}"`;
+
+        function openModal() { document.getElementById('editModal').style.display = 'flex'; }
+        function closeModal() { document.getElementById('editModal').style.display = 'none'; }
         
-        // Load Bio & Pic from LocalStorage
-        const savedBio = localStorage.getItem('userBio') || "Focused on the grind. Let's learn together!";
-        const savedPic = localStorage.getItem('userPic') || `https://ui-avatars.com/api/?name=${username}&background=6366f1&color=fff&size=200&bold=true`;
-        
-        document.getElementById('bioText').textContent = `"${savedBio}"`;
-        document.getElementById('profileImg').src = savedPic;
-
-        // --- ✏️ PROFILE MODAL LOGIC ---
-        function openModal() {
-            document.getElementById('editModal').style.display = 'flex';
-            document.getElementById('newBio').value = savedBio;
-            document.getElementById('newPic').value = localStorage.getItem('userPic') || "";
-        }
-
-        function closeModal() {
-            document.getElementById('editModal').style.display = 'none';
-        }
-
         function saveProfile() {
-            const bioVal = document.getElementById('newBio').value;
-            const picVal = document.getElementById('newPic').value;
-
-            if(bioVal) {
-                localStorage.setItem('userBio', bioVal);
-                document.getElementById('bioText').textContent = `"${bioVal}"`;
-            }
-            if(picVal) {
-                localStorage.setItem('userPic', picVal);
-                document.getElementById('profileImg').src = picVal;
-            }
+            const bio = document.getElementById('newBio').value;
+            const pic = document.getElementById('newPic').value;
+            if(bio) { localStorage.setItem('userBio', bio); document.getElementById('bioText').textContent = `"${bio}"`; }
+            if(pic) { localStorage.setItem('userPic', pic); document.getElementById('profileImg').src = pic; }
             closeModal();
         }
 
-        // --- 🔐 ROOM JOINING LOGIC (With Email Passwords) ---
-        async function joinRoom(roomName) {
-            if(!userEmail || userEmail === "Not Logged In") {
-                return alert("Pehle login karo bhai!");
-            }
-
-            // 1. Send Request to Server
-            alert(`Bhai, password teri email (${userEmail}) pe bhej rahe hain. Check kar le!`);
+        async function joinRoom(room) {
+            if(userEmail === "No Email") return alert("Pehle login karo!");
+            alert("Bhai, password teri email pe bhej rahe hain. Check kar!");
             
             try {
-                const res = await fetch('/send-room-password', {
+                await fetch('/send-room-password', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ email: userEmail, room: roomName })
+                    body: JSON.stringify({ email: userEmail, room })
                 });
                 
-                // 2. Prompt for Password
-                const userPass = prompt(`Enter the password for ${roomName} room:`);
-                if(!userPass) return;
+                const pass = prompt(`Enter password sent to ${userEmail}:`);
+                if(!pass) return;
 
-                // 3. Verify Password
-                const verifyRes = await fetch('/verify-room', {
+                const res = await fetch('/verify-room', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ room: roomName, password: userPass })
+                    body: JSON.stringify({ room, password: pass })
                 });
-                const data = await verifyRes.json();
+                const data = await res.json();
 
                 if(data.success) {
-                    window.location.href = `studyroom.html?room=${roomName}`;
+                    window.location.href = `studyroom.html?room=${room}`;
                 } else {
-                    alert("Galat password hai bhai! Email check kar phir se.");
+                    alert("Galat password hai bhai!");
                 }
-            } catch (err) {
-                alert("Something went wrong! Server check karo.");
-            }
+            } catch (err) { alert("Server error!"); }
         }
 
-        function logout() {
-            localStorage.clear();
-            window.location.href = 'login.html';
-        }
+        function logout() { localStorage.clear(); window.location.href = 'login.html'; }
     </script>
 </body>
 </html>
