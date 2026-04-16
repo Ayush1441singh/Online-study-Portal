@@ -11,19 +11,15 @@
     <style>
         body { background: #0b0f1a; color: white; overflow: hidden; font-family: 'Inter', sans-serif; }
         
-        /* Professional Screen View */
         #screen-container { position: absolute; inset: 0; background: #000; z-index: 5; display: none; flex-direction: column; align-items: center; justify-content: center; }
-        #screen-video { width: 92%; height: 82%; border-radius: 1.5rem; border: 1px solid #6366f1; box-shadow: 0 0 60px rgba(99, 102, 241, 0.25); }
+        #screen-video { width: 92%; height: 82%; border-radius: 1.5rem; border: 1px solid #6366f1; box-shadow: 0 0 60px rgba(99, 102, 241, 0.25); cursor: pointer; }
 
-        /* Draggable Grid */
         #video-grid { position: absolute; top: 100px; right: 20px; width: 230px; z-index: 50; cursor: grab; background: rgba(0,0,0,0.5); padding: 12px; border-radius: 2rem; border: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; gap: 10px; }
         video.camera-stream { width: 100%; border-radius: 1.2rem; border: 2px solid #6366f1; object-fit: cover; }
 
-        /* Notifications */
         #share-toast { position: fixed; top: -100px; left: 50%; transform: translateX(-50%); background: #6366f1; padding: 1rem 2.5rem; border-radius: 3rem; z-index: 10000; transition: 0.6s cubic-bezier(0.18, 0.89, 0.32, 1.28); font-weight: 800; font-style: italic; box-shadow: 0 15px 35px rgba(99, 102, 241, 0.4); text-transform: uppercase; }
         #share-toast.show { top: 40px; }
 
-        /* Board & AI */
         #whiteboardContainer { display: none; position: fixed; inset: 5%; background: white; z-index: 100; border-radius: 2.5rem; box-shadow: 0 0 100px rgba(0,0,0,0.5); }
         
         #ai-panel { 
@@ -45,6 +41,26 @@
             transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
         }
         #ai-panel.ai-active { opacity: 1; pointer-events: auto; transform: translateY(0) scale(1); }
+
+        #fullscreen-btn {
+            position: absolute;
+            top: 80px;
+            right: 60px;
+            background: rgba(99,102,241,0.85);
+            border: none;
+            color: white;
+            padding: 8px 18px;
+            border-radius: 2rem;
+            font-size: 10px;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            cursor: pointer;
+            z-index: 20;
+            backdrop-filter: blur(8px);
+            transition: background 0.2s;
+        }
+        #fullscreen-btn:hover { background: #6366f1; }
     </style>
 </head>
 <body class="h-screen flex flex-col">
@@ -75,8 +91,11 @@
         <div class="flex-1 flex flex-col relative">
             <div id="screen-container">
                 <div class="mb-4 text-[10px] font-black text-indigo-400 uppercase tracking-[0.4em] bg-indigo-500/10 px-6 py-2.5 rounded-full border border-indigo-500/20">LIVE STREAMING</div>
-                <video id="screen-video" autoplay playsinline></video>
-                <button onclick="stopScreenShare()" class="mt-6 bg-red-600 px-8 py-3 rounded-full font-black uppercase text-[10px] shadow-xl">TERMINATE SHARING</button>
+                <video id="screen-video" autoplay playsinline ondblclick="enterFullscreen()"></video>
+                <button id="fullscreen-btn" onclick="enterFullscreen()">⛶ FULLSCREEN</button>
+                <div class="flex space-x-4 mt-6">
+                    <button onclick="stopScreenShare()" class="bg-red-600 px-8 py-3 rounded-full font-black uppercase text-[10px] shadow-xl">TERMINATE SHARING</button>
+                </div>
             </div>
 
             <div id="chatBox" class="flex-1 p-8 overflow-y-auto space-y-6 scroll-smooth"></div>
@@ -135,9 +154,10 @@
     const screenVideo = document.getElementById('screen-video');
     const toast = document.getElementById('share-toast');
 
-    let localStream, screenStream, isMicActive = true;
-    let myVideo = document.createElement('video');
-    myVideo.muted = true; myVideo.className = "camera-stream";
+    let localStream = null;
+    let screenStream = null;
+    let isMicActive = true;
+    let myVideoElement = null;
 
     socket.emit('join room', { username: currentUser, room: currentRoom });
     document.getElementById('roomTitle').textContent = currentRoom;
@@ -148,7 +168,6 @@
         setTimeout(() => toast.classList.remove('show'), 4000);
     }
 
-    // Draggable Grid Logic
     let isDragging = false, startX, startY;
     videoGrid.onmousedown = (e) => { 
         if(e.target.tagName === 'VIDEO') return;
@@ -163,7 +182,6 @@
     };
     document.onmouseup = () => isDragging = false;
 
-    // --- WebRTC Media Engine ---
     myPeer.on('call', (call) => {
         call.answer(localStream);
         call.on('stream', (incomingStream) => {
@@ -171,11 +189,15 @@
                 screenContainer.style.display = 'flex';
                 screenVideo.srcObject = incomingStream;
             } else {
-                const remoteVideo = document.createElement('video');
-                remoteVideo.className = "camera-stream";
-                remoteVideo.srcObject = incomingStream;
-                remoteVideo.play();
-                videoGrid.append(remoteVideo);
+                const existingVideo = document.getElementById('peer-' + call.peer);
+                if(!existingVideo) {
+                    const remoteVideo = document.createElement('video');
+                    remoteVideo.id = 'peer-' + call.peer;
+                    remoteVideo.className = "camera-stream";
+                    remoteVideo.srcObject = incomingStream;
+                    remoteVideo.play();
+                    videoGrid.append(remoteVideo);
+                }
             }
         });
     });
@@ -188,15 +210,37 @@
         if(!localStream) {
             try {
                 localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                myVideo.srcObject = localStream;
-                myVideo.play(); videoGrid.append(myVideo);
+
+                if(myVideoElement) {
+                    myVideoElement.remove();
+                    myVideoElement = null;
+                }
+
+                myVideoElement = document.createElement('video');
+                myVideoElement.id = 'my-own-video';
+                myVideoElement.muted = true;
+                myVideoElement.className = "camera-stream";
+                myVideoElement.srcObject = localStream;
+                myVideoElement.play();
+                videoGrid.append(myVideoElement);
+
                 socket.emit('user-joined-media', { userId: myPeer.id, room: currentRoom });
                 document.getElementById('vBtn').classList.add('bg-indigo-600');
-            } catch (err) { alert("Camera access denied."); }
+                document.getElementById('vBtn').textContent = '📸 CAM ON';
+            } catch (err) { 
+                alert("Camera access denied."); 
+            }
         } else {
             localStream.getTracks().forEach(track => track.stop());
-            myVideo.remove(); localStream = null;
+
+            if(myVideoElement) {
+                myVideoElement.remove();
+                myVideoElement = null;
+            }
+
+            localStream = null;
             document.getElementById('vBtn').classList.remove('bg-indigo-600');
+            document.getElementById('vBtn').textContent = '📸 CAMERA';
         }
     }
 
@@ -204,20 +248,25 @@
         if(!localStream) return;
         isMicActive = !isMicActive;
         localStream.getAudioTracks()[0].enabled = isMicActive;
-        document.getElementById('mBtn').textContent = isMicActive ? "🎤 VOICE ACTIVE" : "🔇 MUTED";
+        document.getElementById('mBtn').textContent = isMicActive ? "🎤 VOICE" : "🔇 MUTED";
         document.getElementById('mBtn').classList.toggle('bg-red-500', !isMicActive);
     }
 
     function connectToPeer(userId, stream) {
+        const existingVideo = document.getElementById('peer-' + userId);
+        if(existingVideo) return;
+
         const call = myPeer.call(userId, stream);
         const v = document.createElement('video');
+        v.id = 'peer-' + userId;
         v.className = "camera-stream";
         call.on('stream', (incomingStream) => {
-            v.srcObject = incomingStream; v.play(); videoGrid.append(v);
+            v.srcObject = incomingStream; 
+            v.play(); 
+            videoGrid.append(v);
         });
     }
 
-    // --- Screen Sharing Flow ---
     async function startScreenShare() {
         try {
             screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
@@ -234,16 +283,30 @@
     function stopScreenShare() {
         if(screenStream) screenStream.getTracks().forEach(track => track.stop());
         screenContainer.style.display = 'none';
+        screenVideo.srcObject = null;
+        screenStream = null;
         socket.emit('screen-share-stop', { user: currentUser, room: currentRoom });
+    }
+
+    function enterFullscreen() {
+        if(screenVideo.requestFullscreen) {
+            screenVideo.requestFullscreen();
+        } else if(screenVideo.webkitRequestFullscreen) {
+            screenVideo.webkitRequestFullscreen();
+        } else if(screenVideo.mozRequestFullScreen) {
+            screenVideo.mozRequestFullScreen();
+        } else if(screenVideo.msRequestFullscreen) {
+            screenVideo.msRequestFullscreen();
+        }
     }
 
     socket.on('notify-share-start', d => showToastNotification(`${d.user} is presenting their screen.`));
     socket.on('notify-share-stop', d => {
         showToastNotification(`${d.user} stopped presenting.`);
         screenContainer.style.display = 'none';
+        screenVideo.srcObject = null;
     });
 
-    // --- Chat Logic ---
     function addMessageUI(data) {
         const isMe = data.user === currentUser;
         const div = document.createElement('div');
@@ -276,7 +339,6 @@
         }
     }
 
-    // --- AI Assistant Logic ---
     function toggleAIPanel() {
         document.getElementById('ai-panel').classList.toggle('ai-active');
     }
@@ -297,7 +359,10 @@
         input.value = ""; messages.scrollTop = messages.scrollHeight;
     }
 
-    // --- Whiteboard Logic ---
+    document.getElementById('ai-input').addEventListener('keydown', (e) => {
+        if(e.key === 'Enter') askAI();
+    });
+
     const canvas = document.getElementById('wbCanvas'); const ctx = canvas.getContext('2d');
     let isDrawing = false;
 
