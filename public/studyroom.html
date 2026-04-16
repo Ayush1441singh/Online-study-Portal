@@ -2,58 +2,96 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>StudyRoom Pro - Live Session</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StudyRoom Pro - Ultra Session</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         body { background: #0b0f1a; color: white; overflow: hidden; font-family: 'Inter', sans-serif; }
         
-        /* Independent Screen View (Professional) */
+        /* Full Screen Share View */
         #screen-container { position: absolute; inset: 0; background: #000; z-index: 5; display: none; flex-direction: column; align-items: center; justify-content: center; }
         #screen-video { width: 92%; height: 82%; border-radius: 1.5rem; border: 1px solid #6366f1; box-shadow: 0 0 60px rgba(99, 102, 241, 0.25); }
 
         /* Draggable Camera Grid */
         #video-grid { position: absolute; top: 100px; right: 20px; width: 230px; z-index: 50; cursor: grab; background: rgba(0,0,0,0.5); padding: 12px; border-radius: 2rem; border: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; gap: 10px; }
-        video.camera { width: 100%; border-radius: 1.2rem; border: 2px solid #6366f1; object-fit: cover; }
+        video.camera-stream { width: 100%; border-radius: 1.2rem; border: 2px solid #6366f1; object-fit: cover; }
 
-        /* Professional Notification Toast */
+        /* Professional Toast Notification */
         #share-toast { position: fixed; top: -100px; left: 50%; transform: translateX(-50%); background: #6366f1; padding: 1rem 2.5rem; border-radius: 3rem; z-index: 10000; transition: 0.6s cubic-bezier(0.18, 0.89, 0.32, 1.28); font-weight: 800; font-style: italic; box-shadow: 0 15px 35px rgba(99, 102, 241, 0.4); text-transform: uppercase; letter-spacing: 1px; }
         #share-toast.show { top: 40px; }
+
+        /* Whiteboard & AI Panel */
+        #whiteboardContainer { display: none; position: fixed; inset: 5%; background: white; z-index: 100; border-radius: 2.5rem; }
+        #ai-panel { display: none; position: fixed; bottom: 100px; right: 25px; width: 320px; height: 480px; background: #1e293b; border-radius: 25px; z-index: 1000; flex-direction: column; border: 1px solid #6366f1; overflow: hidden; box-shadow: 0 25px 50px rgba(0,0,0,0.5); }
     </style>
 </head>
 <body class="h-screen flex flex-col">
 
     <div id="share-toast">📢 <span id="toast-msg">User is sharing screen...</span></div>
 
-    <header class="p-4 bg-slate-900/90 flex justify-between items-center border-b border-white/5 z-20">
+    <header class="p-4 bg-slate-900/95 flex justify-between items-center border-b border-white/5 z-20 shadow-2xl">
         <div class="flex items-center space-x-6">
-            <button onclick="location.href='dashboard.html'" class="text-slate-400 hover:text-white transition font-bold uppercase tracking-widest text-[10px]">← Exit</button>
+            <button onclick="location.href='dashboard.html'" class="text-slate-400 hover:text-white transition font-bold uppercase tracking-widest text-[10px]">← EXIT</button>
             <h2 id="roomTitle" class="font-black italic text-indigo-400 uppercase tracking-[0.3em] text-lg">ROOM</h2>
         </div>
-        <div class="flex space-x-3">
-            <button onclick="toggleVideo()" class="text-[10px] bg-white/5 px-6 py-2.5 rounded-full font-black uppercase tracking-widest hover:bg-indigo-600 transition">📸 CAMERA</button>
-            <button onclick="startScreenShare()" class="text-[10px] bg-indigo-600 px-7 py-2.5 rounded-full font-black uppercase italic shadow-lg shadow-indigo-500/30 active:scale-95 transition">🖥️ SHARE SCREEN</button>
-            <button onclick="stopScreenShare()" id="stop-btn" class="hidden text-[10px] bg-red-600 px-6 py-2.5 rounded-full font-black uppercase italic">🛑 STOP SHARE</button>
+        <div class="flex space-x-2">
+            <button id="vBtn" onclick="toggleVideo()" class="text-[9px] bg-white/5 px-4 py-2.5 rounded-full font-black uppercase tracking-widest hover:bg-indigo-600 transition">📸 CAMERA</button>
+            <button id="mBtn" onclick="toggleMic()" class="text-[9px] bg-white/5 px-4 py-2.5 rounded-full font-black uppercase tracking-widest hover:bg-indigo-600 transition">🎤 VOICE</button>
+            <button onclick="startScreenShare()" class="text-[9px] bg-indigo-600 px-5 py-2.5 rounded-full font-black uppercase shadow-lg shadow-indigo-500/20 active:scale-95 transition">🖥️ SHARE SCREEN</button>
+            <button onclick="toggleWhiteboard()" class="text-[9px] bg-white/5 px-4 py-2.5 rounded-full font-black uppercase tracking-widest">🎨 BOARD</button>
+            <button onclick="clearChat()" class="text-[9px] bg-red-500/10 text-red-500 px-4 py-2.5 rounded-full font-black border border-red-500/20 hover:bg-red-600 hover:text-white transition uppercase">🗑️ CLEAR</button>
         </div>
     </header>
 
     <div class="flex flex-1 relative overflow-hidden">
-        <div id="screen-container">
-            <div class="mb-4 text-[10px] font-black text-indigo-400 uppercase tracking-[0.4em] bg-indigo-500/10 px-6 py-2.5 rounded-full border border-indigo-500/20 animate-pulse">LIVE SCREEN VIEW</div>
-            <video id="screen-video" autoplay playsinline></video>
+        <div class="w-64 bg-slate-900/50 p-6 border-r border-white/5 overflow-y-auto hidden md:block">
+            <h3 class="text-[9px] font-black text-indigo-400 mb-6 uppercase tracking-[0.2em] italic">Classmates</h3>
+            <ul id="userList" class="space-y-3"></ul>
         </div>
 
-        <div id="chatBox" class="flex-1 p-10 overflow-y-auto space-y-6 scroll-smooth"></div>
-        
-        <div id="video-grid">
-            <p class="text-[8px] text-center opacity-30 font-black uppercase tracking-widest pb-1 border-b border-white/5">Local Cams</p>
+        <div class="flex-1 flex flex-col relative">
+            <div id="screen-container">
+                <div class="mb-4 text-[10px] font-black text-indigo-400 uppercase tracking-[0.4em] bg-indigo-500/10 px-6 py-2.5 rounded-full border border-indigo-500/20">LIVE STREAM</div>
+                <video id="screen-video" autoplay playsinline></video>
+                <button onclick="stopScreenShare()" class="mt-6 bg-red-600 px-8 py-3 rounded-full font-black uppercase text-[10px] shadow-xl">STOP SHARING</button>
+            </div>
+
+            <div id="chatBox" class="flex-1 p-8 overflow-y-auto space-y-6 scroll-smooth"></div>
+
+            <div id="video-grid">
+                <p class="text-[8px] text-center opacity-30 font-black uppercase tracking-widest pb-1 border-b border-white/5">Local Handles</p>
+            </div>
         </div>
     </div>
 
-    <form id="chatForm" class="p-8 bg-slate-900 border-t border-white/5 flex items-center space-x-6 z-20">
-        <input id="messageInput" placeholder="Message your study buddies..." autocomplete="off" class="flex-1 bg-white/5 border border-white/10 rounded-2.5rem px-8 py-5 outline-none focus:border-indigo-500 transition shadow-inner text-sm">
-        <button class="bg-indigo-600 px-12 py-5 rounded-2.5rem font-black italic uppercase tracking-widest text-white shadow-xl shadow-indigo-500/20 hover:scale-105 transition">Send</button>
+    <div onclick="toggleAI()" class="fixed bottom-8 left-8 w-14 h-14 bg-indigo-600 rounded-full flex items-center justify-center cursor-pointer shadow-2xl z-[1001] hover:scale-110 transition text-xl">🤖</div>
+    <div id="ai-panel">
+        <div class="p-5 bg-indigo-600 font-bold flex justify-between items-center text-xs"><span>StudyAI Assistant</span><button onclick="toggleAI()">×</button></div>
+        <div id="ai-messages" class="flex-1 p-5 overflow-y-auto text-[11px] space-y-4 bg-slate-950"></div>
+        <div class="p-4 bg-slate-900 flex space-x-2">
+            <input id="ai-input" placeholder="Ask anything..." class="flex-1 bg-white/5 p-3 rounded-xl outline-none text-[11px] focus:border-indigo-500 border border-transparent transition">
+            <button onclick="askAI()" class="text-indigo-400 font-black text-[11px] uppercase tracking-widest">Ask</button>
+        </div>
+    </div>
+
+    <div id="whiteboardContainer">
+        <div class="absolute top-6 right-6 flex space-x-4">
+            <button onclick="clearWhiteboard()" class="bg-red-500 text-white px-8 py-2 rounded-2xl font-black text-xs uppercase shadow-xl">Clear</button>
+            <button onclick="toggleWhiteboard()" class="bg-slate-800 text-white px-8 py-2 rounded-2xl font-black text-xs uppercase">Close</button>
+        </div>
+        <canvas id="wbCanvas" class="w-full h-full cursor-crosshair"></canvas>
+    </div>
+
+    <form id="chatForm" class="p-6 bg-slate-900 border-t border-white/5 flex items-center space-x-4 z-20">
+        <label class="cursor-pointer text-slate-400 hover:text-indigo-500 transition px-2">
+            <i class="fas fa-paperclip text-lg"></i>
+            <input type="file" class="hidden">
+        </label>
+        <input id="messageInput" placeholder="Message your study buddies..." autocomplete="off" class="flex-1 bg-white/5 border border-white/10 rounded-2xl px-6 py-4 outline-none focus:border-indigo-500 transition text-sm">
+        <button class="bg-indigo-600 px-10 py-4 rounded-2xl font-black italic uppercase tracking-widest text-white shadow-xl hover:scale-105 transition">Send</button>
     </form>
 
     <script>
@@ -66,66 +104,37 @@
     const screenContainer = document.getElementById('screen-container');
     const screenVideo = document.getElementById('screen-video');
     const toast = document.getElementById('share-toast');
-    const stopBtn = document.getElementById('stop-btn');
 
-    let localStream, screenStream;
+    let localStream, screenStream, isMicOn = true, isVideoOn = false;
     let myVideo = document.createElement('video');
-    myVideo.muted = true; myVideo.className = "camera";
+    myVideo.muted = true; myVideo.className = "camera-stream";
 
     socket.emit('join room', { username, room });
     document.getElementById('roomTitle').textContent = room;
 
-    // Toast Alert Professional
     function showToast(msg) {
         document.getElementById('toast-msg').textContent = msg;
         toast.classList.add('show');
         setTimeout(() => toast.classList.remove('show'), 4000);
     }
 
-    // Draggable Handle
-    let isDragging = false, offX, offY;
-    videoGrid.onmousedown = e => { if(e.target.tagName === 'VIDEO') return; isDragging = true; offX = e.clientX - videoGrid.offsetLeft; offY = e.clientY - videoGrid.offsetTop; };
-    document.onmousemove = e => { if (isDragging) { videoGrid.style.left = (e.clientX-offX)+'px'; videoGrid.style.top = (e.clientY-offY)+'px'; videoGrid.style.right='auto'; } };
-    document.onmouseup = () => isDragging = false;
+    // Draggable Logic
+    let drag = false, ox, oy;
+    videoGrid.onmousedown = e => { if(e.target.tagName==='VIDEO') return; drag=true; ox=e.clientX-videoGrid.offsetLeft; oy=e.clientY-videoGrid.offsetTop; };
+    document.onmousemove = e => { if(drag){ videoGrid.style.left=(e.clientX-ox)+'px'; videoGrid.style.top=(e.clientY-oy)+'px'; videoGrid.style.right='auto'; } };
+    document.onmouseup = () => drag=false;
 
-    // --- SCREEN SHARE (INDEPENDENT) ---
-    async function startScreenShare() {
-        try {
-            screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-            screenContainer.style.display = 'flex';
-            screenVideo.srcObject = screenStream;
-            stopBtn.classList.remove('hidden');
-
-            socket.emit('screen-share-start', { user: username, room });
-
-            // Send screen to all users separately
-            for (let id in myPeer.connections) {
-                myPeer.call(id, screenStream, { metadata: { type: 'screen' } });
-            }
-
-            screenStream.getVideoTracks()[0].onended = () => stopScreenShare();
-        } catch (e) { console.log("Cancelled"); }
-    }
-
-    function stopScreenShare() {
-        if(screenStream) screenStream.getTracks().forEach(t => t.stop());
-        screenContainer.style.display = 'none';
-        stopBtn.classList.add('hidden');
-        socket.emit('screen-share-stop', { user: username, room });
-    }
-
-    // --- PEER & CAMERA LOGIC ---
+    // --- PEER & MEDIA ---
     myPeer.on('call', call => {
-        call.answer(localStream); 
+        call.answer(localStream);
         call.on('stream', s => {
             if(call.metadata && call.metadata.type === 'screen') {
                 screenContainer.style.display = 'flex';
                 screenVideo.srcObject = s;
             } else {
                 const v = document.createElement('video');
-                v.className = "camera";
-                v.srcObject = s; v.play();
-                videoGrid.append(v);
+                v.className = "camera-stream";
+                v.srcObject = s; v.play(); videoGrid.append(v);
             }
         });
     });
@@ -136,33 +145,59 @@
         if(!localStream) {
             localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
             myVideo.srcObject = localStream;
-            myVideo.play();
-            videoGrid.append(myVideo);
+            myVideo.play(); videoGrid.append(myVideo);
             socket.emit('user-joined-media', { userId: myPeer.id, room });
+            isVideoOn = true;
+            document.getElementById('vBtn').classList.add('bg-indigo-600');
         } else {
             localStream.getTracks().forEach(t => t.stop());
-            myVideo.remove(); localStream = null;
+            myVideo.remove(); localStream = null; isVideoOn = false;
+            document.getElementById('vBtn').classList.remove('bg-indigo-600');
         }
+    }
+
+    function toggleMic() {
+        if(!localStream) return alert("Pehle camera on karo!");
+        isMicOn = !isMicOn;
+        localStream.getAudioTracks()[0].enabled = isMicOn;
+        document.getElementById('mBtn').textContent = isMicOn ? "🎤 VOICE ON" : "🔇 MUTED";
+        document.getElementById('mBtn').classList.toggle('bg-red-500', !isMicOn);
     }
 
     function connectToNewUser(userId, stream) {
         const call = myPeer.call(userId, stream);
         const v = document.createElement('video');
-        v.className = "camera";
-        call.on('stream', userStream => { addVideoStream(v, userStream); });
+        v.className = "camera-stream";
+        call.on('stream', s => { v.srcObject = s; v.play(); videoGrid.append(v); });
     }
 
-    function addVideoStream(v, s) { v.srcObject = s; v.onloadedmetadata = () => v.play(); videoGrid.append(v); }
+    // --- SCREEN SHARE ---
+    async function startScreenShare() {
+        try {
+            screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+            screenContainer.style.display = 'flex';
+            screenVideo.srcObject = screenStream;
+            socket.emit('screen-share-start', { user: username, room });
+            for(let id in myPeer.connections) { myPeer.call(id, screenStream, { metadata: { type: 'screen' } }); }
+            screenStream.getVideoTracks()[0].onended = () => stopScreenShare();
+        } catch (e) { console.log(e); }
+    }
 
-    // --- SOCKET EVENTS ---
-    socket.on('notify-share-start', d => showToast(`${d.user} NE SCREEN SHARE START KIYA!`));
-    socket.on('notify-share-stop', d => { showToast(`${d.user} KA SCREEN SHARE KHATAM.`); screenContainer.style.display = 'none'; });
+    function stopScreenShare() {
+        if(screenStream) screenStream.getTracks().forEach(t => t.stop());
+        screenContainer.style.display = 'none';
+        socket.emit('screen-share-stop', { user: username, room });
+    }
 
+    socket.on('notify-share-start', d => showToast(`${d.user} STARTING SCREEN SHARE!`));
+    socket.on('notify-share-stop', d => { showToast(`${d.user} STOPPED SHARING.`); screenContainer.style.display = 'none'; });
+
+    // --- CHAT & USERS ---
     socket.on('chat message', d => {
         const isMe = d.user === username;
         const div = document.createElement('div');
         div.className = `flex ${isMe ? 'justify-end' : 'justify-start'} mb-6`;
-        div.innerHTML = `<div class="${isMe ? 'bg-indigo-600 shadow-xl shadow-indigo-500/20' : 'bg-slate-800'} p-5 rounded-2xl max-w-sm border border-white/5"><p class="text-[9px] font-black uppercase opacity-50 mb-1 tracking-widest">${d.user}</p><p class="text-[13px] leading-relaxed">${d.msg}</p></div>`;
+        div.innerHTML = `<div class="${isMe ? 'bg-indigo-600 shadow-lg' : 'bg-slate-800'} p-4 rounded-2xl max-w-sm border border-white/5"><p class="text-[8px] font-black uppercase opacity-50 mb-1">${d.user}</p><p class="text-[13px]">${d.msg}</p></div>`;
         document.getElementById('chatBox').appendChild(div);
         document.getElementById('chatBox').scrollTop = document.getElementById('chatBox').scrollHeight;
     });
@@ -174,10 +209,32 @@
     };
 
     socket.on('update user list', u => {
-        document.getElementById('userList').innerHTML = u.map(x => `<li class="flex items-center space-x-4 bg-white/5 p-4 rounded-2xl border border-white/5"><div class="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_10px_green]"></div><span class="text-xs font-black uppercase tracking-widest italic">${x.username}</span></li>`).join('');
+        document.getElementById('userList').innerHTML = u.map(x => `<li class="flex items-center space-x-3 bg-white/5 p-3 rounded-xl border border-white/5"><div class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div><span class="text-[10px] font-black uppercase tracking-widest">${x.username}</span></li>`).join('');
     });
 
-    socket.on('load history', h => h.forEach(d => { /* chat logic logic logic */ }));
+    socket.on('load history', h => h.forEach(d => { /* chat load */ }));
+
+    async function clearChat() { if(confirm("Clear chat?")) { await fetch(`/clear-chat/${room}`, { method: 'DELETE' }); document.getElementById('chatBox').innerHTML = ''; } }
+
+    // --- AI & WHITEBOARD ---
+    function toggleAI() { const p = document.getElementById('ai-panel'); p.style.display = p.style.display==='flex' ? 'none' : 'flex'; }
+    async function askAI() {
+        const i = document.getElementById('ai-input'), b = document.getElementById('ai-messages');
+        const v = i.value; if(!v) return;
+        b.innerHTML += `<div class="mb-2 italic text-slate-400">Me: ${v}</div>`;
+        i.value = "Thinking...";
+        const res = await fetch('/ask-ai', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ prompt: v }) });
+        const d = await res.json();
+        b.innerHTML += `<div class="mb-4 text-indigo-400 border-l-2 border-indigo-500 pl-3">Buddy: ${d.answer}</div>`;
+        i.value = ""; b.scrollTop = b.scrollHeight;
+    }
+
+    const canvas = document.getElementById('wbCanvas'); const ctx = canvas.getContext('2d');
+    let drawing = false;
+    function toggleWhiteboard() { const wb = document.getElementById('whiteboardContainer'); wb.style.display = wb.style.display==='block' ? 'none' : 'block'; if(wb.style.display==='block'){canvas.width=canvas.offsetWidth;canvas.height=canvas.offsetHeight;} }
+    canvas.onmousedown = () => drawing = true; canvas.onmouseup = () => { drawing = false; ctx.beginPath(); };
+    canvas.onmousemove = e => { if(!drawing) return; ctx.lineWidth=3; ctx.lineCap='round'; ctx.strokeStyle='#000'; ctx.lineTo(e.clientX-canvas.offsetLeft-(window.innerWidth*0.05), e.clientY-canvas.offsetTop-(window.innerHeight*0.05)); ctx.stroke(); };
+    function clearWhiteboard() { ctx.clearRect(0,0,canvas.width,canvas.height); }
     </script>
 </body>
 </html>
