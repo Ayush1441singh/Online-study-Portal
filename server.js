@@ -9,12 +9,13 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const app = express();
 const server = http.createServer(app);
 
-// Increased buffer size for attachments/images
+// Initialize Socket.io with high buffer for file sharing
 const io = new Server(server, { 
     cors: { origin: "*" },
     maxHttpBufferSize: 1e8 
 });
 
+// Middleware
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -35,14 +36,27 @@ mongoose.connect('mongodb://Admin:1441@ac-kiqfzih-shard-00-00.t6qiotx.mongodb.ne
         console.error('❌ Database Connection Error:', err);
     });
 
-// --- API ROUTES ---
+// --- PAGE ROUTING FIXES ---
 
+// Root / Login Page
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
 
-// Registration Endpoint
-app.post('/register', async (req, res) => {
+// Explicit Register Page Route (Fixes "Cannot GET register.html")
+app.get('/register.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'register.html'));
+});
+
+// Optional route without extension
+app.get('/register', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'register.html'));
+});
+
+// --- API ENDPOINTS ---
+
+// Professional Registration API
+app.post('/api/register', async (req, res) => {
     try {
         const { username, email, password } = req.body;
         const normalizedEmail = email.toLowerCase().trim();
@@ -60,15 +74,15 @@ app.post('/register', async (req, res) => {
         });
         
         await newUser.save();
-        res.status(201).json({ success: true, message: "Registration successful. You can now log in." });
+        res.status(201).json({ success: true, message: "Registration successful." });
     } catch (err) { 
         console.error("Registration Error:", err);
         res.status(500).json({ success: false, message: "Server error during registration." }); 
     }
 });
 
-// Login Endpoint
-app.post('/login', async (req, res) => {
+// Professional Login API
+app.post('/api/login', async (req, res) => {
     try {
         const { email, password } = req.body;
         const normalizedEmail = email.toLowerCase().trim();
@@ -82,30 +96,27 @@ app.post('/login', async (req, res) => {
         }
     } catch (err) { 
         console.error("Login Error:", err);
-        res.status(500).json({ success: false, message: "Authentication failure due to server error." }); 
+        res.status(500).json({ success: false, message: "Authentication failure." }); 
     }
 });
 
-// AI Assistant Endpoint
+// AI Assistant API
 app.post('/ask-ai', async (req, res) => {
     try {
-        const promptContext = `You are a professional academic mentor for students. Provide a concise, highly accurate, and helpful response to the following query: ${req.body.prompt}`;
-        const result = await aiModel.generateContent(promptContext);
+        const result = await aiModel.generateContent(`You are a professional academic mentor. Provide a concise response to: ${req.body.prompt}`);
         const responseText = (await result.response).text();
         res.status(200).json({ answer: responseText });
     } catch (e) { 
-        console.error("AI Error:", e);
-        res.status(500).json({ answer: "The AI service is temporarily unavailable. Please try again later." }); 
+        res.status(500).json({ answer: "AI service is currently busy. Please try later." }); 
     }
 });
 
-// Clear Chat Endpoint
+// Clear Chat API
 app.delete('/clear-chat/:room', async (req, res) => {
     try {
         await Message.deleteMany({ room: req.params.room });
-        res.status(200).json({ success: true, message: "Chat history cleared." });
+        res.status(200).json({ success: true });
     } catch (e) { 
-        console.error("Clear Chat Error:", e);
         res.status(500).json({ success: false }); 
     }
 });
@@ -126,11 +137,11 @@ io.on('connection', (socket) => {
         
         rooms[room].push({ id: socket.id, username: username });
 
-        // Load chat history
+        // Load chat history from DB
         const history = await Message.find({ room: room }).sort({ timestamp: 1 });
         socket.emit('load history', history);
         
-        // Notify room members
+        // Sync Online User List
         io.to(room).emit('update user list', rooms[room]);
     });
 
@@ -140,10 +151,12 @@ io.on('connection', (socket) => {
         io.to(data.room).emit('chat message', data);
     });
 
+    // Whiteboard Syncing
     socket.on('drawing', (data) => {
         socket.to(data.room).emit('drawing', data);
     });
 
+    // Media Signaling (Video/Audio/Screen)
     socket.on('screen-share-start', (data) => {
         socket.to(data.room).emit('notify-share-start', data);
     });
@@ -170,5 +183,5 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-    console.log(`🚀 StudyPortal Live Engine Running on Port ${PORT}`);
+    console.log(`🚀 StudyPortal Live on Port ${PORT}`);
 });

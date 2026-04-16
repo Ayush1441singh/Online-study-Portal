@@ -2,8 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Register - StudyPortal</title>
+    <title>Create Account - StudyPortal</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background: #0f172a; color: white; font-family: 'Inter', sans-serif; }
@@ -15,13 +14,13 @@
     <div class="glass-panel w-full max-w-md p-10 rounded-[2.5rem] shadow-2xl border border-indigo-500/20">
         <div class="text-center mb-10">
             <h1 class="text-3xl font-black italic tracking-tighter uppercase text-indigo-500">STUDYPORTAL</h1>
-            <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-2">Join the Community</p>
+            <p class="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-2">Join the Academic Hub</p>
         </div>
 
         <form id="regForm" class="space-y-5">
             <div class="space-y-2">
                 <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-2">Full Name</label>
-                <input id="username" type="text" required placeholder="Your Name" class="w-full bg-white/5 border border-white/10 p-4 rounded-2xl outline-none focus:border-indigo-500 transition text-sm">
+                <input id="username" type="text" required placeholder="Your Professional Name" class="w-full bg-white/5 border border-white/10 p-4 rounded-2xl outline-none focus:border-indigo-500 transition text-sm">
             </div>
             <div class="space-y-2">
                 <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-2">Email Address</label>
@@ -32,47 +31,43 @@
                 <input id="password" type="password" required placeholder="••••••••" class="w-full bg-white/5 border border-white/10 p-4 rounded-2xl outline-none focus:border-indigo-500 transition text-sm">
             </div>
 
-            <button type="submit" class="w-full bg-indigo-600 py-4 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-indigo-500 transition-all shadow-xl shadow-indigo-500/20 mt-6">
-                Create Account
+            <button type="submit" class="w-full bg-indigo-600 py-4 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-indigo-500 transition-all shadow-xl mt-4">
+                Create Professional Account
             </button>
         </form>
 
-        <p class="text-center mt-8 text-xs text-slate-500 uppercase font-bold tracking-widest">
-            Already have an account? <a href="login.html" class="text-indigo-400 hover:text-indigo-300 transition">Log In</a>
+        <p class="text-center mt-8 text-xs text-slate-500 font-bold uppercase tracking-widest">
+            Already a member? <a href="login.html" class="text-indigo-400 hover:text-indigo-300 transition underline underline-offset-4">Log In Here</a>
         </p>
     </div>
 
     <script>
-        document.getElementById('regForm').addEventListener('submit', async function(e) {
+        document.getElementById('regForm').onsubmit = async (e) => {
             e.preventDefault();
             
-            const usernameInput = document.getElementById('username').value;
-            const emailInput = document.getElementById('email').value;
-            const passwordInput = document.getElementById('password').value;
+            const username = document.getElementById('username').value;
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
 
             try {
-                const response = await fetch('/register', {
+                const response = await fetch('/api/register', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        username: usernameInput, 
-                        email: emailInput, 
-                        password: passwordInput 
-                    })
+                    body: JSON.stringify({ username, email, password })
                 });
 
                 const data = await response.json();
 
                 if (data.success) {
-                    alert("Account registered successfully. Redirecting to login...");
+                    alert("Registration successful! Redirecting to login...");
                     window.location.href = 'login.html';
                 } else {
                     alert(data.message);
                 }
             } catch (error) {
-                alert("Server error occurred. Please try again.");
+                alert("Network error. Please try again.");
             }
-        });
+        };
     </script>
 </body>
 </html>

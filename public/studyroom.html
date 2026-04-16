@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>StudyRoom Pro - Ultra Session</title>
+    <title>StudyRoom Pro - Live Session</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
@@ -11,22 +11,21 @@
     <style>
         body { background: #0b0f1a; color: white; overflow: hidden; font-family: 'Inter', sans-serif; }
         
-        /* Independent Screen View */
+        /* Professional Screen View */
         #screen-container { position: absolute; inset: 0; background: #000; z-index: 5; display: none; flex-direction: column; align-items: center; justify-content: center; }
         #screen-video { width: 92%; height: 82%; border-radius: 1.5rem; border: 1px solid #6366f1; box-shadow: 0 0 60px rgba(99, 102, 241, 0.25); }
 
-        /* Draggable Camera Grid */
+        /* Draggable Grid */
         #video-grid { position: absolute; top: 100px; right: 20px; width: 230px; z-index: 50; cursor: grab; background: rgba(0,0,0,0.5); padding: 12px; border-radius: 2rem; border: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; gap: 10px; }
         video.camera-stream { width: 100%; border-radius: 1.2rem; border: 2px solid #6366f1; object-fit: cover; }
 
-        /* Professional Toast Notification */
-        #share-toast { position: fixed; top: -100px; left: 50%; transform: translateX(-50%); background: #6366f1; padding: 1rem 2.5rem; border-radius: 3rem; z-index: 10000; transition: 0.6s cubic-bezier(0.18, 0.89, 0.32, 1.28); font-weight: 800; font-style: italic; box-shadow: 0 15px 35px rgba(99, 102, 241, 0.4); text-transform: uppercase; letter-spacing: 1px; }
+        /* Notifications */
+        #share-toast { position: fixed; top: -100px; left: 50%; transform: translateX(-50%); background: #6366f1; padding: 1rem 2.5rem; border-radius: 3rem; z-index: 10000; transition: 0.6s cubic-bezier(0.18, 0.89, 0.32, 1.28); font-weight: 800; font-style: italic; box-shadow: 0 15px 35px rgba(99, 102, 241, 0.4); text-transform: uppercase; }
         #share-toast.show { top: 40px; }
 
-        /* Whiteboard */
+        /* Board & AI */
         #whiteboardContainer { display: none; position: fixed; inset: 5%; background: white; z-index: 100; border-radius: 2.5rem; box-shadow: 0 0 100px rgba(0,0,0,0.5); }
         
-        /* Premium AI Panel */
         #ai-panel { 
             display: flex; 
             flex-direction: column;
@@ -35,82 +34,74 @@
             right: 30px; 
             width: 340px; 
             height: 500px; 
-            background: rgba(15, 23, 42, 0.9);
+            background: rgba(15, 23, 42, 0.95);
             backdrop-filter: blur(20px);
             border-radius: 1.5rem; 
             z-index: 1000; 
             border: 1px solid rgba(99, 102, 241, 0.3); 
-            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
             opacity: 0;
             pointer-events: none;
             transform: translateY(20px) scale(0.95);
             transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
         }
-        #ai-panel.ai-active {
-            opacity: 1;
-            pointer-events: auto;
-            transform: translateY(0) scale(1);
-        }
-        #ai-messages::-webkit-scrollbar { width: 4px; }
-        #ai-messages::-webkit-scrollbar-thumb { background: rgba(99, 102, 241, 0.5); border-radius: 4px; }
+        #ai-panel.ai-active { opacity: 1; pointer-events: auto; transform: translateY(0) scale(1); }
     </style>
 </head>
 <body class="h-screen flex flex-col">
 
     <div id="share-toast">📢 <span id="toast-msg">User is sharing screen...</span></div>
 
-    <header class="p-4 bg-slate-900/95 flex justify-between items-center border-b border-white/5 z-20 shadow-xl">
+    <header class="p-4 bg-slate-900/95 flex justify-between items-center border-b border-white/5 z-20 shadow-2xl">
         <div class="flex items-center space-x-6">
             <button onclick="location.href='dashboard.html'" class="text-slate-400 hover:text-white transition font-bold uppercase tracking-widest text-[10px]">← EXIT ROOM</button>
             <h2 id="roomTitle" class="font-black italic text-indigo-400 uppercase tracking-[0.3em] text-lg">ROOM</h2>
         </div>
         <div class="flex space-x-2">
             <button id="vBtn" onclick="toggleCamera()" class="text-[9px] bg-white/5 px-4 py-2.5 rounded-full font-black uppercase tracking-widest hover:bg-indigo-600 transition">📸 CAMERA</button>
-            <button id="mBtn" onclick="toggleMicrophone()" class="text-[9px] bg-white/5 px-4 py-2.5 rounded-full font-black uppercase tracking-widest hover:bg-indigo-600 transition">🎤 VOICE</button>
+            <button id="mBtn" onclick="toggleMic()" class="text-[9px] bg-white/5 px-4 py-2.5 rounded-full font-black uppercase tracking-widest hover:bg-indigo-600 transition">🎤 VOICE</button>
             <button onclick="startScreenShare()" class="text-[9px] bg-indigo-600 px-5 py-2.5 rounded-full font-black uppercase shadow-lg shadow-indigo-500/20 active:scale-95 transition">🖥️ SHARE SCREEN</button>
-            <button onclick="toggleWhiteboard()" class="text-[9px] bg-white/5 px-4 py-2.5 rounded-full font-black uppercase tracking-widest hover:bg-slate-700 transition">🎨 WHITEBOARD</button>
-            <button onclick="clearChatHistory()" class="text-[9px] bg-red-500/10 text-red-500 px-4 py-2.5 rounded-full font-black border border-red-500/20 hover:bg-red-600 hover:text-white transition uppercase">🗑️ CLEAR CHAT</button>
+            <button onclick="toggleWhiteboard()" class="text-[9px] bg-white/5 px-4 py-2.5 rounded-full font-black uppercase tracking-widest">🎨 WHITEBOARD</button>
+            <button onclick="clearChat()" class="text-[9px] bg-red-500/10 text-red-500 px-4 py-2.5 rounded-full font-black border border-red-500/20 hover:bg-red-600 hover:text-white transition uppercase">🗑️ CLEAR CHAT</button>
         </div>
     </header>
 
     <div class="flex flex-1 relative overflow-hidden">
         
         <div class="w-64 bg-slate-900/50 p-6 border-r border-white/5 overflow-y-auto hidden md:block">
-            <h3 class="text-[9px] font-black text-indigo-400 mb-6 uppercase tracking-[0.2em] italic underline underline-offset-8">Active Users</h3>
+            <h3 class="text-[9px] font-black text-indigo-400 mb-6 uppercase tracking-[0.2em] italic underline underline-offset-8">Online Students</h3>
             <ul id="userList" class="space-y-3"></ul>
         </div>
 
         <div class="flex-1 flex flex-col relative">
-            
             <div id="screen-container">
-                <div class="mb-4 text-[10px] font-black text-indigo-400 uppercase tracking-[0.4em] bg-indigo-500/10 px-6 py-2.5 rounded-full border border-indigo-500/20">LIVE SCREEN STREAM</div>
+                <div class="mb-4 text-[10px] font-black text-indigo-400 uppercase tracking-[0.4em] bg-indigo-500/10 px-6 py-2.5 rounded-full border border-indigo-500/20">LIVE STREAMING</div>
                 <video id="screen-video" autoplay playsinline></video>
-                <button onclick="stopScreenShare()" class="mt-6 bg-red-600 px-8 py-3 rounded-full font-black uppercase text-[10px] shadow-xl hover:bg-red-500 transition">TERMINATE SHARING</button>
+                <button onclick="stopScreenShare()" class="mt-6 bg-red-600 px-8 py-3 rounded-full font-black uppercase text-[10px] shadow-xl">TERMINATE SHARING</button>
             </div>
 
             <div id="chatBox" class="flex-1 p-8 overflow-y-auto space-y-6 scroll-smooth"></div>
 
             <div id="video-grid">
-                <p class="text-[8px] text-center opacity-30 font-black uppercase tracking-widest pb-1 border-b border-white/5">Local Cameras</p>
+                <p class="text-[8px] text-center opacity-30 font-black uppercase tracking-widest pb-1 border-b border-white/5">Local Cams</p>
             </div>
         </div>
     </div>
 
-    <button onclick="toggleAIPanel()" class="fixed bottom-8 right-8 w-16 h-16 rounded-full bg-gradient-to-tr from-indigo-600 to-purple-600 text-white shadow-2xl flex items-center justify-center text-2xl hover:scale-110 transition-all z-[1001] border border-white/10 group">
+    <button onclick="toggleAIPanel()" class="fixed bottom-8 right-8 w-16 h-16 rounded-full bg-gradient-to-tr from-indigo-600 to-purple-600 text-white shadow-2xl flex items-center justify-center text-2xl hover:scale-110 transition z-[1001] border border-white/10 group">
         <i class="fas fa-robot group-hover:rotate-12 transition-transform"></i>
     </button>
 
     <div id="ai-panel">
         <div class="p-4 bg-indigo-900/50 border-b border-white/5 flex justify-between items-center">
-            <span class="font-black italic uppercase tracking-widest text-[10px]">StudyAI Assistant</span>
-            <button onclick="toggleAIPanel()" class="text-slate-400 hover:text-white"><i class="fas fa-times"></i></button>
+            <span class="font-black italic uppercase tracking-widest text-[10px]">StudyAI Pro</span>
+            <button onclick="toggleAIPanel()"><i class="fas fa-times text-slate-400"></i></button>
         </div>
         <div id="ai-messages" class="flex-1 p-5 overflow-y-auto space-y-4 text-[11px]">
             <div class="text-center text-slate-500 text-[10px] uppercase tracking-widest my-4 opacity-50">Assistant Ready</div>
         </div>
         <div class="p-3 m-3 bg-black/40 border border-white/10 rounded-2xl flex items-center space-x-2">
-            <input id="ai-input" placeholder="Ask a question..." autocomplete="off" class="flex-1 bg-transparent outline-none px-2 text-[11px] text-white">
-            <button onclick="askAIAssistant()" class="bg-indigo-600 w-8 h-8 rounded-xl flex items-center justify-center hover:bg-indigo-500 transition shadow-lg">
+            <input id="ai-input" placeholder="Ask a professional question..." class="flex-1 bg-transparent outline-none px-2 text-[11px] text-white">
+            <button onclick="askAI()" class="bg-indigo-600 w-8 h-8 rounded-xl flex items-center justify-center hover:bg-indigo-500 transition shadow-lg">
                 <i class="fas fa-paper-plane text-white text-[10px]"></i>
             </button>
         </div>
@@ -118,322 +109,221 @@
 
     <div id="whiteboardContainer">
         <div class="absolute top-6 right-6 flex space-x-4 z-50">
-            <button onclick="clearWhiteboardCanvas()" class="bg-red-500 text-white px-8 py-2 rounded-2xl font-black text-xs uppercase shadow-xl hover:bg-red-400">Reset</button>
-            <button onclick="toggleWhiteboard()" class="bg-slate-800 text-white px-8 py-2 rounded-2xl font-black text-xs uppercase hover:bg-slate-700">Close</button>
+            <button onclick="resetBoard()" class="bg-red-500 text-white px-8 py-2 rounded-2xl font-black text-xs uppercase shadow-xl">Reset</button>
+            <button onclick="toggleWhiteboard()" class="bg-slate-800 text-white px-8 py-2 rounded-2xl font-black text-xs uppercase">Close</button>
         </div>
         <canvas id="wbCanvas" class="w-full h-full cursor-crosshair"></canvas>
     </div>
 
     <form id="chatForm" class="p-8 bg-slate-900/95 border-t border-white/5 flex items-center space-x-6 z-20 shadow-2xl">
-        <label class="cursor-pointer text-slate-400 hover:text-indigo-500 transition px-2" title="Attach file">
+        <label class="cursor-pointer text-slate-400 hover:text-indigo-500 transition px-2">
             <i class="fas fa-paperclip text-lg"></i>
-            <input type="file" class="hidden" id="fileAttachment">
+            <input type="file" class="hidden">
         </label>
-        <input id="messageInput" placeholder="Send a message to everyone..." autocomplete="off" class="flex-1 bg-white/5 border border-white/10 rounded-[2rem] px-8 py-5 outline-none focus:border-indigo-500 transition text-sm text-white">
-        <button class="bg-indigo-600 px-12 py-5 rounded-[2rem] font-black italic uppercase tracking-widest text-white shadow-xl hover:scale-105 transition">SEND</button>
+        <input id="messageInput" placeholder="Send a message to everyone..." autocomplete="off" class="flex-1 bg-white/5 border border-white/10 rounded-[2rem] px-8 py-5 outline-none focus:border-indigo-500 transition text-sm">
+        <button class="bg-indigo-600 px-12 py-5 rounded-[2rem] font-black italic uppercase tracking-widest text-white shadow-xl hover:scale-105 transition">SEND MESSAGE</button>
     </form>
 
     <script>
-    // --- INITIALIZATION ---
     const socket = io(); 
-    const currentUser = localStorage.getItem('username') || 'Unknown Student'; 
-    const currentRoom = new URLSearchParams(window.location.search).get('room') || 'General';
-    
+    const currentUser = localStorage.getItem('username'); 
+    const currentRoom = new URLSearchParams(window.location.search).get('room');
     const myPeer = new Peer(undefined, { host: '0.peerjs.com', port: 443, secure: true }); 
-    
-    const videoGridContainer = document.getElementById('video-grid'); 
-    const screenDisplayContainer = document.getElementById('screen-container'); 
-    const screenVideoPlayer = document.getElementById('screen-video'); 
-    const notificationToast = document.getElementById('share-toast');
 
-    let userMediaStream, displayMediaStream;
-    let isMicrophoneActive = true;
-    
-    const localVideoElement = document.createElement('video'); 
-    localVideoElement.muted = true; 
-    localVideoElement.className = "camera-stream";
+    const videoGrid = document.getElementById('video-grid');
+    const screenContainer = document.getElementById('screen-container');
+    const screenVideo = document.getElementById('screen-video');
+    const toast = document.getElementById('share-toast');
 
-    socket.emit('join room', { username: currentUser, room: currentRoom }); 
+    let localStream, screenStream, isMicActive = true;
+    let myVideo = document.createElement('video');
+    myVideo.muted = true; myVideo.className = "camera-stream";
+
+    socket.emit('join room', { username: currentUser, room: currentRoom });
     document.getElementById('roomTitle').textContent = currentRoom;
 
-    // --- UI NOTIFICATIONS ---
-    function triggerNotification(message) { 
-        document.getElementById('toast-msg').textContent = message; 
-        notificationToast.classList.add('show'); 
-        setTimeout(() => {
-            notificationToast.classList.remove('show');
-        }, 4000); 
+    function showToastNotification(msg) {
+        document.getElementById('toast-msg').textContent = msg;
+        toast.classList.add('show');
+        setTimeout(() => toast.classList.remove('show'), 4000);
     }
 
-    // --- DRAGGABLE VIDEO GRID ---
-    let isDraggingGrid = false, offsetX, offsetY; 
-    videoGridContainer.addEventListener('mousedown', (e) => { 
-        if (e.target.tagName === 'VIDEO') return; 
-        isDraggingGrid = true; 
-        offsetX = e.clientX - videoGridContainer.offsetLeft; 
-        offsetY = e.clientY - videoGridContainer.offsetTop; 
-    });
-    document.addEventListener('mousemove', (e) => { 
-        if (isDraggingGrid) { 
-            videoGridContainer.style.left = (e.clientX - offsetX) + 'px'; 
-            videoGridContainer.style.top = (e.clientY - offsetY) + 'px'; 
-            videoGridContainer.style.right = 'auto'; 
-        } 
-    });
-    document.addEventListener('mouseup', () => {
-        isDraggingGrid = false;
-    });
-
-    // --- WEBRTC PEER CONNECTION HANDLING ---
-    myPeer.on('call', (call) => { 
-        call.answer(userMediaStream); 
-        call.on('stream', (incomingStream) => { 
-            if (call.metadata && call.metadata.type === 'screen') { 
-                screenDisplayContainer.style.display = 'flex'; 
-                screenVideoPlayer.srcObject = incomingStream; 
-            } else { 
-                const newVideoElement = document.createElement('video'); 
-                newVideoElement.className = "camera-stream"; 
-                newVideoElement.srcObject = incomingStream; 
-                newVideoElement.play(); 
-                videoGridContainer.append(newVideoElement); 
-            } 
-        }); 
-    });
-
-    socket.on('user-connected', (userId) => { 
-        if (userMediaStream) {
-            connectToNewPeer(userId, userMediaStream); 
+    // Draggable Grid Logic
+    let isDragging = false, startX, startY;
+    videoGrid.onmousedown = (e) => { 
+        if(e.target.tagName === 'VIDEO') return;
+        isDragging = true; startX = e.clientX - videoGrid.offsetLeft; startY = e.clientY - videoGrid.offsetTop;
+    };
+    document.onmousemove = (e) => {
+        if (isDragging) {
+            videoGrid.style.left = (e.clientX - startX) + 'px';
+            videoGrid.style.top = (e.clientY - startY) + 'px';
+            videoGrid.style.right = 'auto';
         }
-    });
+    };
+    document.onmouseup = () => isDragging = false;
 
-    // --- MEDIA CONTROLS ---
-    async function toggleCamera() { 
-        if (!userMediaStream) { 
-            try {
-                userMediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true }); 
-                localVideoElement.srcObject = userMediaStream; 
-                localVideoElement.play(); 
-                videoGridContainer.append(localVideoElement); 
-                socket.emit('user-joined-media', { userId: myPeer.id, room: currentRoom }); 
-                document.getElementById('vBtn').classList.add('bg-indigo-600'); 
-            } catch (error) {
-                alert("Camera permission denied.");
+    // --- WebRTC Media Engine ---
+    myPeer.on('call', (call) => {
+        call.answer(localStream);
+        call.on('stream', (incomingStream) => {
+            if(call.metadata && call.metadata.type === 'screen') {
+                screenContainer.style.display = 'flex';
+                screenVideo.srcObject = incomingStream;
+            } else {
+                const remoteVideo = document.createElement('video');
+                remoteVideo.className = "camera-stream";
+                remoteVideo.srcObject = incomingStream;
+                remoteVideo.play();
+                videoGrid.append(remoteVideo);
             }
-        } else { 
-            userMediaStream.getTracks().forEach(track => track.stop()); 
-            localVideoElement.remove(); 
-            userMediaStream = null; 
-            document.getElementById('vBtn').classList.remove('bg-indigo-600'); 
-        } 
-    }
-
-    function toggleMicrophone() { 
-        if (!userMediaStream) {
-            alert("Please enable the camera first to activate the microphone.");
-            return;
-        }
-        isMicrophoneActive = !isMicrophoneActive; 
-        userMediaStream.getAudioTracks()[0].enabled = isMicrophoneActive; 
-        document.getElementById('mBtn').textContent = isMicrophoneActive ? "🎤 VOICE ACTIVE" : "🔇 MUTED"; 
-        document.getElementById('mBtn').classList.toggle('bg-red-500', !isMicrophoneActive); 
-    }
-
-    function connectToNewPeer(userId, stream) { 
-        const call = myPeer.call(userId, stream); 
-        const peerVideo = document.createElement('video'); 
-        peerVideo.className = "camera-stream"; 
-        call.on('stream', (incomingStream) => { 
-            peerVideo.srcObject = incomingStream; 
-            peerVideo.play(); 
-            videoGridContainer.append(peerVideo); 
-        }); 
-    }
-
-    // --- SCREEN SHARING ---
-    async function startScreenShare() { 
-        try { 
-            displayMediaStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true }); 
-            screenDisplayContainer.style.display = 'flex'; 
-            screenVideoPlayer.srcObject = displayMediaStream; 
-            socket.emit('screen-share-start', { user: currentUser, room: currentRoom }); 
-            
-            for (let id in myPeer.connections) { 
-                myPeer.call(id, displayMediaStream, { metadata: { type: 'screen' } }); 
-            } 
-            
-            displayMediaStream.getVideoTracks()[0].onended = () => {
-                stopScreenShare();
-            }; 
-        } catch (e) {
-            console.log("Screen sharing cancelled by user.");
-        } 
-    }
-
-    function stopScreenShare() { 
-        if (displayMediaStream) {
-            displayMediaStream.getTracks().forEach(track => track.stop()); 
-        }
-        screenDisplayContainer.style.display = 'none'; 
-        socket.emit('screen-share-stop', { user: currentUser, room: currentRoom }); 
-    }
-
-    socket.on('notify-share-start', (data) => {
-        triggerNotification(`${data.user} has started presenting their screen.`);
-    });
-    
-    socket.on('notify-share-stop', (data) => { 
-        triggerNotification(`${data.user} has stopped presenting.`); 
-        screenDisplayContainer.style.display = 'none'; 
+        });
     });
 
-    // --- CHAT SYSTEM ---
-    function appendChatMessage(data) {
-        const isCurrentUser = data.user === currentUser; 
-        const messageContainer = document.createElement('div'); 
-        messageContainer.className = `flex ${isCurrentUser ? 'justify-end' : 'justify-start'} mb-6`; 
-        
-        messageContainer.innerHTML = `
-            <div class="${isCurrentUser ? 'bg-indigo-600 shadow-xl' : 'bg-slate-800'} p-5 rounded-2xl max-w-sm border border-white/5">
+    socket.on('user-connected', (userId) => {
+        if(localStream) connectToPeer(userId, localStream);
+    });
+
+    async function toggleCamera() {
+        if(!localStream) {
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                myVideo.srcObject = localStream;
+                myVideo.play(); videoGrid.append(myVideo);
+                socket.emit('user-joined-media', { userId: myPeer.id, room: currentRoom });
+                document.getElementById('vBtn').classList.add('bg-indigo-600');
+            } catch (err) { alert("Camera access denied."); }
+        } else {
+            localStream.getTracks().forEach(track => track.stop());
+            myVideo.remove(); localStream = null;
+            document.getElementById('vBtn').classList.remove('bg-indigo-600');
+        }
+    }
+
+    function toggleMic() {
+        if(!localStream) return;
+        isMicActive = !isMicActive;
+        localStream.getAudioTracks()[0].enabled = isMicActive;
+        document.getElementById('mBtn').textContent = isMicActive ? "🎤 VOICE ACTIVE" : "🔇 MUTED";
+        document.getElementById('mBtn').classList.toggle('bg-red-500', !isMicActive);
+    }
+
+    function connectToPeer(userId, stream) {
+        const call = myPeer.call(userId, stream);
+        const v = document.createElement('video');
+        v.className = "camera-stream";
+        call.on('stream', (incomingStream) => {
+            v.srcObject = incomingStream; v.play(); videoGrid.append(v);
+        });
+    }
+
+    // --- Screen Sharing Flow ---
+    async function startScreenShare() {
+        try {
+            screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+            screenContainer.style.display = 'flex';
+            screenVideo.srcObject = screenStream;
+            socket.emit('screen-share-start', { user: currentUser, room: currentRoom });
+            for(let id in myPeer.connections) {
+                myPeer.call(id, screenStream, { metadata: { type: 'screen' } });
+            }
+            screenStream.getVideoTracks()[0].onended = () => stopScreenShare();
+        } catch (e) { console.error(e); }
+    }
+
+    function stopScreenShare() {
+        if(screenStream) screenStream.getTracks().forEach(track => track.stop());
+        screenContainer.style.display = 'none';
+        socket.emit('screen-share-stop', { user: currentUser, room: currentRoom });
+    }
+
+    socket.on('notify-share-start', d => showToastNotification(`${d.user} is presenting their screen.`));
+    socket.on('notify-share-stop', d => {
+        showToastNotification(`${d.user} stopped presenting.`);
+        screenContainer.style.display = 'none';
+    });
+
+    // --- Chat Logic ---
+    function addMessageUI(data) {
+        const isMe = data.user === currentUser;
+        const div = document.createElement('div');
+        div.className = `flex ${isMe ? 'justify-end' : 'justify-start'} mb-6`;
+        div.innerHTML = `
+            <div class="${isMe ? 'bg-indigo-600 shadow-xl' : 'bg-slate-800'} p-5 rounded-2xl max-w-sm border border-white/5">
                 <p class="text-[8px] font-black uppercase opacity-50 mb-1 tracking-widest">${data.user}</p>
                 <p class="text-[13px] leading-relaxed">${data.msg}</p>
             </div>
-        `; 
-        
-        document.getElementById('chatBox').appendChild(messageContainer); 
-        document.getElementById('chatBox').scrollTop = document.getElementById('chatBox').scrollHeight; 
+        `;
+        document.getElementById('chatBox').appendChild(div);
+        document.getElementById('chatBox').scrollTop = document.getElementById('chatBox').scrollHeight;
     }
 
-    socket.on('chat message', (data) => {
-        appendChatMessage(data);
-    });
-
-    socket.on('load history', (historyArray) => {
-        historyArray.forEach(data => appendChatMessage(data));
-    });
-
-    document.getElementById('chatForm').addEventListener('submit', (e) => { 
-        e.preventDefault(); 
-        const messageText = document.getElementById('messageInput').value; 
-        if (messageText.trim()) { 
-            socket.emit('chat message', { user: currentUser, msg: messageText, room: currentRoom }); 
-            document.getElementById('messageInput').value = ''; 
-        } 
-    });
-
-    // --- ACTIVE USERS LIST ---
-    socket.on('update user list', (usersArray) => { 
-        document.getElementById('userList').innerHTML = usersArray.map(user => `
+    socket.on('chat message', data => addMessageUI(data));
+    socket.on('load history', history => history.forEach(addMessageUI));
+    socket.on('update user list', users => {
+        document.getElementById('userList').innerHTML = users.map(u => `
             <li class="flex items-center space-x-4 bg-white/5 p-4 rounded-2xl border border-white/5">
-                <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse shadow-[0_0_10px_green]"></div>
-                <span class="text-[10px] font-black uppercase tracking-widest italic">${user.username}</span>
+                <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <span class="text-[10px] font-black uppercase tracking-widest italic">${u.username}</span>
             </li>
-        `).join(''); 
+        `).join('');
     });
 
-    async function clearChatHistory() { 
-        if (confirm("Are you sure you want to permanently clear the chat history for this room?")) { 
-            await fetch(`/clear-chat/${currentRoom}`, { method: 'DELETE' }); 
-            document.getElementById('chatBox').innerHTML = ''; 
-        } 
-    }
-
-    // --- AI ASSISTANT ---
-    function toggleAIPanel() { 
-        document.getElementById('ai-panel').classList.toggle('ai-active'); 
-    }
-
-    async function askAIAssistant() { 
-        const inputField = document.getElementById('ai-input');
-        const messageBox = document.getElementById('ai-messages'); 
-        const queryText = inputField.value; 
-        
-        if (!queryText) return; 
-        
-        // User Query Bubble
-        messageBox.innerHTML += `
-            <div class="flex justify-end mb-3">
-                <div class="bg-indigo-600 text-white px-4 py-2 rounded-2xl text-[11px] shadow-md max-w-[85%]">${queryText}</div>
-            </div>
-        `; 
-        
-        inputField.value = "Processing request..."; 
-        messageBox.scrollTop = messageBox.scrollHeight;
-        
-        try { 
-            const response = await fetch('/ask-ai', { 
-                method: 'POST', 
-                headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify({ prompt: queryText }) 
-            }); 
-            
-            const data = await response.json(); 
-            
-            // AI Response Bubble
-            messageBox.innerHTML += `
-                <div class="flex justify-start mb-4">
-                    <div class="bg-slate-800/80 border border-indigo-500/30 text-slate-200 px-4 py-3 rounded-2xl text-[11px] shadow-lg leading-relaxed max-w-[90%]">
-                        <i class="fas fa-magic text-indigo-400 mr-2"></i>${data.answer}
-                    </div>
-                </div>
-            `; 
-        } catch (error) { 
-            messageBox.innerHTML += `
-                <div class="text-red-400 text-[10px] text-center my-2">Error connecting to AI service. Please try again.</div>
-            `; 
-        } 
-        
-        inputField.value = ""; 
-        messageBox.scrollTop = messageBox.scrollHeight; 
-    }
-
-    // Add enter key listener for AI
-    document.getElementById('ai-input').addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
-            askAIAssistant();
-        }
-    });
-
-    // --- WHITEBOARD SYSTEM ---
-    const canvasElement = document.getElementById('wbCanvas'); 
-    const canvasContext = canvasElement.getContext('2d'); 
-    let isDrawingOnBoard = false;
-    
-    function toggleWhiteboard() { 
-        const whiteboardContainer = document.getElementById('whiteboardContainer'); 
-        if (whiteboardContainer.style.display === 'block') {
-            whiteboardContainer.style.display = 'none';
-        } else {
-            whiteboardContainer.style.display = 'block';
-            canvasElement.width = canvasElement.offsetWidth;
-            canvasElement.height = canvasElement.offsetHeight;
+    async function clearChat() {
+        if(confirm("Permanently clear chat history?")) {
+            await fetch(`/clear-chat/${currentRoom}`, { method: 'DELETE' });
+            document.getElementById('chatBox').innerHTML = '';
         }
     }
 
-    canvasElement.addEventListener('mousedown', () => {
-        isDrawingOnBoard = true;
-    });
-    
-    canvasElement.addEventListener('mouseup', () => { 
-        isDrawingOnBoard = false; 
-        canvasContext.beginPath(); 
-    });
-
-    canvasElement.addEventListener('mousemove', (e) => { 
-        if (!isDrawingOnBoard) return; 
-        
-        canvasContext.lineWidth = 3; 
-        canvasContext.lineCap = 'round'; 
-        canvasContext.strokeStyle = '#000'; 
-        
-        const rect = canvasElement.getBoundingClientRect();
-        canvasContext.lineTo(e.clientX - rect.left, e.clientY - rect.top); 
-        canvasContext.stroke(); 
-    });
-
-    function clearWhiteboardCanvas() { 
-        canvasContext.clearRect(0, 0, canvasElement.width, canvasElement.height); 
+    // --- AI Assistant Logic ---
+    function toggleAIPanel() {
+        document.getElementById('ai-panel').classList.toggle('ai-active');
     }
+
+    async function askAI() {
+        const input = document.getElementById('ai-input'), messages = document.getElementById('ai-messages');
+        const query = input.value; if(!query) return;
+
+        messages.innerHTML += `<div class="flex justify-end mb-3"><div class="bg-indigo-600 text-white px-4 py-2 rounded-2xl text-[11px] shadow-md max-w-[85%]">${query}</div></div>`;
+        input.value = "Generating response...";
+        messages.scrollTop = messages.scrollHeight;
+
+        try {
+            const res = await fetch('/ask-ai', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ prompt: query }) });
+            const data = await res.json();
+            messages.innerHTML += `<div class="flex justify-start mb-4"><div class="bg-slate-800 border border-indigo-500/30 text-slate-200 px-4 py-3 rounded-2xl text-[11px] shadow-lg leading-relaxed max-w-[90%]"><i class="fas fa-magic text-indigo-400 mr-2"></i>${data.answer}</div></div>`;
+        } catch (err) { messages.innerHTML += `<div class="text-red-400 text-[10px] text-center">AI Error.</div>`; }
+        input.value = ""; messages.scrollTop = messages.scrollHeight;
+    }
+
+    // --- Whiteboard Logic ---
+    const canvas = document.getElementById('wbCanvas'); const ctx = canvas.getContext('2d');
+    let isDrawing = false;
+
+    function toggleWhiteboard() {
+        const wb = document.getElementById('whiteboardContainer');
+        wb.style.display = wb.style.display === 'block' ? 'none' : 'block';
+        if(wb.style.display === 'block') { canvas.width = canvas.offsetWidth; canvas.height = canvas.offsetHeight; }
+    }
+
+    canvas.onmousedown = () => isDrawing = true;
+    canvas.onmouseup = () => { isDrawing = false; ctx.beginPath(); };
+    canvas.onmousemove = (e) => {
+        if(!isDrawing) return;
+        ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.strokeStyle = '#000';
+        const rect = canvas.getBoundingClientRect();
+        ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
+        ctx.stroke();
+    };
+
+    function resetBoard() { ctx.clearRect(0, 0, canvas.width, canvas.height); }
+
+    document.getElementById('chatForm').onsubmit = (e) => {
+        e.preventDefault();
+        const msg = document.getElementById('messageInput').value;
+        if(msg.trim()) { socket.emit('chat message', { user: currentUser, msg, room: currentRoom }); document.getElementById('messageInput').value = ''; }
+    };
     </script>
 </body>
 </html>
