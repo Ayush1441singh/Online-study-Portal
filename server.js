@@ -1,4 +1,4 @@
-const express = require('express');
+\const express = require('express');
 const mongoose = require('mongoose');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -9,13 +9,15 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const app = express();
 const server = http.createServer(app);
 
-// Initialize Socket.io with high buffer for file sharing
+// Initialize Socket.io with professional buffer settings
 const io = new Server(server, { 
-    cors: { origin: "*" },
+    cors: { 
+        origin: "*" 
+    }, 
     maxHttpBufferSize: 1e8 
 });
 
-// Middleware
+// Middlewares
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -23,50 +25,59 @@ app.use(express.static(path.join(__dirname, 'public')));
 const User = require('./Models/User.js');
 const Message = require('./Models/message.js');
 
-// --- AI CONFIGURATION ---
+// --- AI SERVICE CONFIGURATION ---
 const genAI = new GoogleGenerativeAI(process.env.API_KEY || "AIzaSyAFZ7qgyHGspnMEwZdkLqoUqkvfNSozU4I");
 const aiModel = genAI.getGenerativeModel({ model: "gemini-pro" });
 
 // --- MONGODB CONNECTION ---
-mongoose.connect('mongodb://Admin:1441@ac-kiqfzih-shard-00-00.t6qiotx.mongodb.net:27017,ac-kiqfzih-shard-00-01.t6qiotx.mongodb.net:27017,ac-kiqfzih-shard-00-02.t6qiotx.mongodb.net:27017/StudyPortal?ssl=true&replicaSet=atlas-n7gr5h-shard-0&authSource=admin&appName=Cluster0')
+const dbURI = 'mongodb://Admin:1441@ac-kiqfzih-shard-00-00.t6qiotx.mongodb.net:27017,ac-kiqfzih-shard-00-01.t6qiotx.mongodb.net:27017,ac-kiqfzih-shard-00-02.t6qiotx.mongodb.net:27017/StudyPortal?ssl=true&replicaSet=atlas-n7gr5h-shard-0&authSource=admin&appName=Cluster0';
+
+mongoose.connect(dbURI)
     .then(() => {
-        console.log('✅ System Online: Connected to StudyPortal Production Database');
+        console.log('✅ System Online: Connected to StudyPortal Database');
     })
     .catch((err) => {
         console.error('❌ Database Connection Error:', err);
     });
 
-// --- PAGE ROUTING FIXES ---
+// --- PAGE ROUTING (Fixes "Not Found" Errors) ---
 
-// Root / Login Page
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
 
-// Explicit Register Page Route (Fixes "Cannot GET register.html")
+app.get('/login.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+
 app.get('/register.html', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'register.html'));
 });
 
-// Optional route without extension
-app.get('/register', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'register.html'));
+app.get('/dashboard.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
 });
 
-// --- API ENDPOINTS ---
+app.get('/studyroom.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'studyroom.html'));
+});
 
-// Professional Registration API
-app.post('/api/register', async (req, res) => {
+// --- API ENDPOINTS (Full Implementation) ---
+
+// Registration API
+app.post('/register', async (req, res) => {
     try {
         const { username, email, password } = req.body;
         const normalizedEmail = email.toLowerCase().trim();
         
         const existingUser = await User.findOne({ email: normalizedEmail });
         if (existingUser) {
-            return res.status(400).json({ success: false, message: "This email is already registered." });
+            return res.status(400).json({ success: false, message: "Email is already registered." });
         }
         
-        const hashedPassword = await bcrypt.hash(password, 10);
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
+        
         const newUser = new User({ 
             username: username.trim(), 
             email: normalizedEmail, 
@@ -74,89 +85,96 @@ app.post('/api/register', async (req, res) => {
         });
         
         await newUser.save();
-        res.status(201).json({ success: true, message: "Registration successful." });
+        console.log(`✨ New Account Created: ${normalizedEmail}`);
+        res.status(201).json({ success: true, message: "Account created successfully." });
     } catch (err) { 
         console.error("Registration Error:", err);
-        res.status(500).json({ success: false, message: "Server error during registration." }); 
+        res.status(500).json({ success: false, message: "Server error during registration process." }); 
     }
 });
 
-// Professional Login API
-app.post('/api/login', async (req, res) => {
+// Login API
+app.post('/login', async (req, res) => {
     try {
         const { email, password } = req.body;
         const normalizedEmail = email.toLowerCase().trim();
         
         const user = await User.findOne({ email: normalizedEmail });
-        
         if (user && await bcrypt.compare(password, user.password)) {
-            res.status(200).json({ success: true, username: user.username, email: user.email });
+            console.log(`🔓 User Login: ${normalizedEmail}`);
+            res.status(200).json({ 
+                success: true, 
+                username: user.username, 
+                email: user.email 
+            });
         } else { 
-            res.status(400).json({ success: false, message: "Invalid credentials. Please try again." }); 
+            res.status(400).json({ success: false, message: "Invalid email or password. Access denied." }); 
         }
     } catch (err) { 
         console.error("Login Error:", err);
-        res.status(500).json({ success: false, message: "Authentication failure." }); 
+        res.status(500).json({ success: false, message: "Internal server error during authentication." }); 
     }
 });
 
 // AI Assistant API
 app.post('/ask-ai', async (req, res) => {
     try {
-        const result = await aiModel.generateContent(`You are a professional academic mentor. Provide a concise response to: ${req.body.prompt}`);
-        const responseText = (await result.response).text();
-        res.status(200).json({ answer: responseText });
+        const userPrompt = req.body.prompt;
+        const result = await aiModel.generateContent(`You are a professional study assistant. Provide a clear and helpful explanation for: ${userPrompt}`);
+        const aiResponse = await result.response;
+        res.status(200).json({ answer: aiResponse.text() });
     } catch (e) { 
-        res.status(500).json({ answer: "AI service is currently busy. Please try later." }); 
+        console.error("AI Error:", e);
+        res.status(500).json({ answer: "AI service is currently busy. Please try again in a few moments." }); 
     }
 });
 
 // Clear Chat API
 app.delete('/clear-chat/:room', async (req, res) => {
     try {
-        await Message.deleteMany({ room: req.params.room });
-        res.status(200).json({ success: true });
+        const roomName = req.params.room;
+        await Message.deleteMany({ room: roomName });
+        res.status(200).json({ success: true, message: "Chat history wiped." });
     } catch (e) { 
+        console.error("Clear Chat Error:", e);
         res.status(500).json({ success: false }); 
     }
 });
 
-// --- SOCKET.IO REAL-TIME ENGINE ---
-const rooms = {};
+// --- SOCKET.IO REAL-TIME LOGIC (Expanded) ---
+const activeRooms = {};
 
 io.on('connection', (socket) => {
-    console.log('New connection established:', socket.id);
+    console.log('⚡ New Socket Connected:', socket.id);
 
     socket.on('join room', async (data) => {
         const { username, room } = data;
         socket.join(room);
         
-        if (!rooms[room]) {
-            rooms[room] = [];
+        if (!activeRooms[room]) {
+            activeRooms[room] = [];
         }
         
-        rooms[room].push({ id: socket.id, username: username });
+        activeRooms[room].push({ id: socket.id, username: username });
 
-        // Load chat history from DB
+        // Load messages from Database
         const history = await Message.find({ room: room }).sort({ timestamp: 1 });
         socket.emit('load history', history);
         
-        // Sync Online User List
-        io.to(room).emit('update user list', rooms[room]);
+        // Sync active user list for everyone in the room
+        io.to(room).emit('update user list', activeRooms[room]);
     });
 
     socket.on('chat message', async (data) => {
-        const newMsg = new Message(data);
-        await newMsg.save();
+        const msgToSave = new Message(data);
+        await msgToSave.save();
         io.to(data.room).emit('chat message', data);
     });
 
-    // Whiteboard Syncing
     socket.on('drawing', (data) => {
         socket.to(data.room).emit('drawing', data);
     });
 
-    // Media Signaling (Video/Audio/Screen)
     socket.on('screen-share-start', (data) => {
         socket.to(data.room).emit('notify-share-start', data);
     });
@@ -170,11 +188,13 @@ io.on('connection', (socket) => {
     });
 
     socket.on('disconnect', () => {
-        for (const room in rooms) {
-            const index = rooms[room].findIndex(u => u.id === socket.id);
+        for (const room in activeRooms) {
+            const index = activeRooms[room].findIndex(u => u.id === socket.id);
             if (index !== -1) {
-                rooms[room].splice(index, 1);
-                io.to(room).emit('update user list', rooms[room]);
+                const userWhoLeft = activeRooms[room][index];
+                activeRooms[room].splice(index, 1);
+                io.to(room).emit('update user list', activeRooms[room]);
+                console.log(`👋 User Left: ${userWhoLeft.username}`);
                 break;
             }
         }
@@ -183,5 +203,5 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-    console.log(`🚀 StudyPortal Live on Port ${PORT}`);
+    console.log(`🚀 Portal Live Engine Running on Port ${PORT}`);
 });

@@ -2,69 +2,40 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - StudyPortal</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background: #0f172a; color: white; font-family: 'Inter', sans-serif; }
-        .glass-panel { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); }
+        .glass { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); }
     </style>
 </head>
 <body class="h-screen flex items-center justify-center p-6">
-
-    <div class="glass-panel w-full max-w-md p-10 rounded-[2.5rem] shadow-2xl border border-indigo-500/20">
-        <div class="text-center mb-10">
-            <h1 class="text-3xl font-black italic tracking-tighter uppercase text-indigo-500">STUDYPORTAL</h1>
-            <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-2">Welcome Back</p>
-        </div>
-
+    <div class="glass w-full max-w-md p-10 rounded-[2.5rem] shadow-2xl">
+        <h1 class="text-3xl font-black italic text-center text-indigo-500 mb-10 uppercase">STUDYPORTAL</h1>
         <form id="loginForm" class="space-y-6">
-            <div class="space-y-2">
-                <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-2">Email Address</label>
-                <input id="email" type="email" required placeholder="name@example.com" class="w-full bg-white/5 border border-white/10 p-4 rounded-2xl outline-none focus:border-indigo-500 transition text-sm">
-            </div>
-            <div class="space-y-2">
-                <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-2">Password</label>
-                <input id="password" type="password" required placeholder="••••••••" class="w-full bg-white/5 border border-white/10 p-4 rounded-2xl outline-none focus:border-indigo-500 transition text-sm">
-            </div>
-
-            <button type="submit" class="w-full bg-indigo-600 py-4 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-indigo-500 transition-all shadow-xl shadow-indigo-500/20 mt-4">
-                Sign In
-            </button>
+            <input id="email" type="email" required placeholder="Email Address" class="w-full bg-white/5 border border-white/10 p-4 rounded-2xl outline-none focus:border-indigo-500">
+            <input id="password" type="password" required placeholder="Password" class="w-full bg-white/5 border border-white/10 p-4 rounded-2xl outline-none focus:border-indigo-500">
+            <button type="submit" class="w-full bg-indigo-600 py-4 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl">Sign In</button>
         </form>
-
-        <p class="text-center mt-8 text-xs text-slate-500 uppercase font-bold tracking-widest">
-            New here? <a href="register.html" class="text-indigo-400 hover:text-indigo-300 transition">Create Account</a>
+        <p class="text-center mt-8 text-xs text-slate-500 font-bold uppercase tracking-widest">
+            New here? <a href="/register.html" class="text-indigo-400">Create Account</a>
         </p>
     </div>
-
     <script>
-        document.getElementById('loginForm').addEventListener('submit', async function(e) {
+        document.getElementById('loginForm').onsubmit = async (e) => {
             e.preventDefault();
-            
-            const emailInput = document.getElementById('email').value;
-            const passwordInput = document.getElementById('password').value;
-
-            try {
-                const response = await fetch('/login', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email: emailInput, password: passwordInput })
-                });
-
-                const data = await response.json();
-
-                if (data.success) {
-                    localStorage.setItem('username', data.username);
-                    localStorage.setItem('userEmail', data.email);
-                    window.location.href = 'dashboard.html';
-                } else {
-                    alert(data.message);
-                }
-            } catch (error) {
-                alert("Server error occurred. Please check your connection.");
-            }
-        });
+            const res = await fetch('/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: document.getElementById('email').value, password: document.getElementById('password').value })
+            });
+            const data = await res.json();
+            if (data.success) {
+                localStorage.setItem('username', data.username);
+                localStorage.setItem('userEmail', data.email);
+                window.location.href = '/dashboard.html';
+            } else { alert(data.message); }
+        };
     </script>
 </body>
 </html>
