@@ -1,4 +1,4 @@
-\const express = require('express');
+const express = require('express');
 const mongoose = require('mongoose');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -9,7 +9,7 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const app = express();
 const server = http.createServer(app);
 
-// Initialize Socket.io with professional buffer settings
+// Initialize Socket.io with professional buffer settings for attachments
 const io = new Server(server, { 
     cors: { 
         origin: "*" 
@@ -19,9 +19,11 @@ const io = new Server(server, {
 
 // Middlewares
 app.use(express.json());
+// Static files from the 'public' directory
 app.use(express.static(path.join(__dirname, 'public')));
 
 // --- DATABASE MODELS ---
+// Ensure these files exist in your 'Models' folder
 const User = require('./Models/User.js');
 const Message = require('./Models/message.js');
 
@@ -40,7 +42,7 @@ mongoose.connect(dbURI)
         console.error('❌ Database Connection Error:', err);
     });
 
-// --- PAGE ROUTING (Fixes "Not Found" Errors) ---
+// --- PAGE ROUTING (Guaranteed Paths) ---
 
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'login.html'));
@@ -62,9 +64,9 @@ app.get('/studyroom.html', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'studyroom.html'));
 });
 
-// --- API ENDPOINTS (Full Implementation) ---
+// --- API ENDPOINTS (Full Length) ---
 
-// Registration API
+// Registration Logic
 app.post('/register', async (req, res) => {
     try {
         const { username, email, password } = req.body;
@@ -85,15 +87,15 @@ app.post('/register', async (req, res) => {
         });
         
         await newUser.save();
-        console.log(`✨ New Account Created: ${normalizedEmail}`);
-        res.status(201).json({ success: true, message: "Account created successfully." });
+        console.log(`✨ New User Account Created: ${normalizedEmail}`);
+        res.status(201).json({ success: true, message: "Registration successful." });
     } catch (err) { 
         console.error("Registration Error:", err);
-        res.status(500).json({ success: false, message: "Server error during registration process." }); 
+        res.status(500).json({ success: false, message: "Server error during registration." }); 
     }
 });
 
-// Login API
+// Login Logic
 app.post('/login', async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -101,52 +103,47 @@ app.post('/login', async (req, res) => {
         
         const user = await User.findOne({ email: normalizedEmail });
         if (user && await bcrypt.compare(password, user.password)) {
-            console.log(`🔓 User Login: ${normalizedEmail}`);
+            console.log(`🔓 Successful Login: ${normalizedEmail}`);
             res.status(200).json({ 
                 success: true, 
                 username: user.username, 
                 email: user.email 
             });
         } else { 
-            res.status(400).json({ success: false, message: "Invalid email or password. Access denied." }); 
+            res.status(400).json({ success: false, message: "Invalid email or password." }); 
         }
     } catch (err) { 
         console.error("Login Error:", err);
-        res.status(500).json({ success: false, message: "Internal server error during authentication." }); 
+        res.status(500).json({ success: false, message: "Authentication failure." }); 
     }
 });
 
-// AI Assistant API
+// AI Assistant
 app.post('/ask-ai', async (req, res) => {
     try {
-        const userPrompt = req.body.prompt;
-        const result = await aiModel.generateContent(`You are a professional study assistant. Provide a clear and helpful explanation for: ${userPrompt}`);
+        const result = await aiModel.generateContent(`Provide a professional academic response to: ${req.body.prompt}`);
         const aiResponse = await result.response;
         res.status(200).json({ answer: aiResponse.text() });
     } catch (e) { 
         console.error("AI Error:", e);
-        res.status(500).json({ answer: "AI service is currently busy. Please try again in a few moments." }); 
+        res.status(500).json({ answer: "The AI service is currently unavailable." }); 
     }
 });
 
-// Clear Chat API
+// Clear Chat Logic
 app.delete('/clear-chat/:room', async (req, res) => {
     try {
-        const roomName = req.params.room;
-        await Message.deleteMany({ room: roomName });
-        res.status(200).json({ success: true, message: "Chat history wiped." });
+        await Message.deleteMany({ room: req.params.room });
+        res.status(200).json({ success: true });
     } catch (e) { 
-        console.error("Clear Chat Error:", e);
         res.status(500).json({ success: false }); 
     }
 });
 
-// --- SOCKET.IO REAL-TIME LOGIC (Expanded) ---
+// --- SOCKET.IO ENGINE ---
 const activeRooms = {};
 
 io.on('connection', (socket) => {
-    console.log('⚡ New Socket Connected:', socket.id);
-
     socket.on('join room', async (data) => {
         const { username, room } = data;
         socket.join(room);
@@ -157,11 +154,9 @@ io.on('connection', (socket) => {
         
         activeRooms[room].push({ id: socket.id, username: username });
 
-        // Load messages from Database
         const history = await Message.find({ room: room }).sort({ timestamp: 1 });
         socket.emit('load history', history);
         
-        // Sync active user list for everyone in the room
         io.to(room).emit('update user list', activeRooms[room]);
     });
 
@@ -191,17 +186,16 @@ io.on('connection', (socket) => {
         for (const room in activeRooms) {
             const index = activeRooms[room].findIndex(u => u.id === socket.id);
             if (index !== -1) {
-                const userWhoLeft = activeRooms[room][index];
                 activeRooms[room].splice(index, 1);
                 io.to(room).emit('update user list', activeRooms[room]);
-                console.log(`👋 User Left: ${userWhoLeft.username}`);
                 break;
             }
         }
     });
 });
 
+// Port configuration for Render
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-    console.log(`🚀 Portal Live Engine Running on Port ${PORT}`);
+    console.log(`🚀 Portal Engine Active on Port ${PORT}`);
 });
