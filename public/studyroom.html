@@ -11,7 +11,7 @@
     <style>
         body { background: #0b0f1a; color: white; overflow: hidden; font-family: 'Inter', sans-serif; }
         
-        /* Full Screen Share View */
+        /* Independent Screen View */
         #screen-container { position: absolute; inset: 0; background: #000; z-index: 5; display: none; flex-direction: column; align-items: center; justify-content: center; }
         #screen-video { width: 92%; height: 82%; border-radius: 1.5rem; border: 1px solid #6366f1; box-shadow: 0 0 60px rgba(99, 102, 241, 0.25); }
 
@@ -24,9 +24,9 @@
         #share-toast.show { top: 40px; }
 
         /* Whiteboard */
-        #whiteboardContainer { display: none; position: fixed; inset: 5%; background: white; z-index: 100; border-radius: 2.5rem; }
+        #whiteboardContainer { display: none; position: fixed; inset: 5%; background: white; z-index: 100; border-radius: 2.5rem; box-shadow: 0 0 100px rgba(0,0,0,0.5); }
         
-        /* 🔥 NEW PREMIUM AI PANEL STYLING 🔥 */
+        /* Premium AI Panel */
         #ai-panel { 
             display: flex; 
             flex-direction: column;
@@ -35,14 +35,12 @@
             right: 30px; 
             width: 340px; 
             height: 500px; 
-            background: rgba(15, 23, 42, 0.85);
+            background: rgba(15, 23, 42, 0.9);
             backdrop-filter: blur(20px);
             border-radius: 1.5rem; 
             z-index: 1000; 
             border: 1px solid rgba(99, 102, 241, 0.3); 
-            overflow: hidden; 
-            box-shadow: 0 20px 50px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05) inset;
-            /* Smooth slide-in animation */
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
             opacity: 0;
             pointer-events: none;
             transform: translateY(20px) scale(0.95);
@@ -53,8 +51,6 @@
             pointer-events: auto;
             transform: translateY(0) scale(1);
         }
-        
-        /* Custom Scrollbar for AI chat */
         #ai-messages::-webkit-scrollbar { width: 4px; }
         #ai-messages::-webkit-scrollbar-thumb { background: rgba(99, 102, 241, 0.5); border-radius: 4px; }
     </style>
@@ -63,241 +59,381 @@
 
     <div id="share-toast">📢 <span id="toast-msg">User is sharing screen...</span></div>
 
-    <header class="p-4 bg-slate-900/95 flex justify-between items-center border-b border-white/5 z-20 shadow-2xl">
+    <header class="p-4 bg-slate-900/95 flex justify-between items-center border-b border-white/5 z-20 shadow-xl">
         <div class="flex items-center space-x-6">
-            <button onclick="location.href='dashboard.html'" class="text-slate-400 hover:text-white transition font-bold uppercase tracking-widest text-[10px]">← EXIT</button>
+            <button onclick="location.href='dashboard.html'" class="text-slate-400 hover:text-white transition font-bold uppercase tracking-widest text-[10px]">← EXIT ROOM</button>
             <h2 id="roomTitle" class="font-black italic text-indigo-400 uppercase tracking-[0.3em] text-lg">ROOM</h2>
         </div>
         <div class="flex space-x-2">
-            <button id="vBtn" onclick="toggleVideo()" class="text-[9px] bg-white/5 px-4 py-2.5 rounded-full font-black uppercase tracking-widest hover:bg-indigo-600 transition">📸 CAMERA</button>
-            <button id="mBtn" onclick="toggleMic()" class="text-[9px] bg-white/5 px-4 py-2.5 rounded-full font-black uppercase tracking-widest hover:bg-indigo-600 transition">🎤 VOICE</button>
+            <button id="vBtn" onclick="toggleCamera()" class="text-[9px] bg-white/5 px-4 py-2.5 rounded-full font-black uppercase tracking-widest hover:bg-indigo-600 transition">📸 CAMERA</button>
+            <button id="mBtn" onclick="toggleMicrophone()" class="text-[9px] bg-white/5 px-4 py-2.5 rounded-full font-black uppercase tracking-widest hover:bg-indigo-600 transition">🎤 VOICE</button>
             <button onclick="startScreenShare()" class="text-[9px] bg-indigo-600 px-5 py-2.5 rounded-full font-black uppercase shadow-lg shadow-indigo-500/20 active:scale-95 transition">🖥️ SHARE SCREEN</button>
-            <button onclick="toggleWhiteboard()" class="text-[9px] bg-white/5 px-4 py-2.5 rounded-full font-black uppercase tracking-widest">🎨 BOARD</button>
-            <button onclick="clearChat()" class="text-[9px] bg-red-500/10 text-red-500 px-4 py-2.5 rounded-full font-black border border-red-500/20 hover:bg-red-600 hover:text-white transition uppercase">🗑️ CLEAR</button>
+            <button onclick="toggleWhiteboard()" class="text-[9px] bg-white/5 px-4 py-2.5 rounded-full font-black uppercase tracking-widest hover:bg-slate-700 transition">🎨 WHITEBOARD</button>
+            <button onclick="clearChatHistory()" class="text-[9px] bg-red-500/10 text-red-500 px-4 py-2.5 rounded-full font-black border border-red-500/20 hover:bg-red-600 hover:text-white transition uppercase">🗑️ CLEAR CHAT</button>
         </div>
     </header>
 
     <div class="flex flex-1 relative overflow-hidden">
+        
         <div class="w-64 bg-slate-900/50 p-6 border-r border-white/5 overflow-y-auto hidden md:block">
-            <h3 class="text-[9px] font-black text-indigo-400 mb-6 uppercase tracking-[0.2em] italic">Classmates</h3>
+            <h3 class="text-[9px] font-black text-indigo-400 mb-6 uppercase tracking-[0.2em] italic underline underline-offset-8">Active Users</h3>
             <ul id="userList" class="space-y-3"></ul>
         </div>
 
         <div class="flex-1 flex flex-col relative">
+            
             <div id="screen-container">
-                <div class="mb-4 text-[10px] font-black text-indigo-400 uppercase tracking-[0.4em] bg-indigo-500/10 px-6 py-2.5 rounded-full border border-indigo-500/20">LIVE STREAM</div>
+                <div class="mb-4 text-[10px] font-black text-indigo-400 uppercase tracking-[0.4em] bg-indigo-500/10 px-6 py-2.5 rounded-full border border-indigo-500/20">LIVE SCREEN STREAM</div>
                 <video id="screen-video" autoplay playsinline></video>
-                <button onclick="stopScreenShare()" class="mt-6 bg-red-600 px-8 py-3 rounded-full font-black uppercase text-[10px] shadow-xl">STOP SHARING</button>
+                <button onclick="stopScreenShare()" class="mt-6 bg-red-600 px-8 py-3 rounded-full font-black uppercase text-[10px] shadow-xl hover:bg-red-500 transition">TERMINATE SHARING</button>
             </div>
 
             <div id="chatBox" class="flex-1 p-8 overflow-y-auto space-y-6 scroll-smooth"></div>
 
             <div id="video-grid">
-                <p class="text-[8px] text-center opacity-30 font-black uppercase tracking-widest pb-1 border-b border-white/5">Local Handles</p>
+                <p class="text-[8px] text-center opacity-30 font-black uppercase tracking-widest pb-1 border-b border-white/5">Local Cameras</p>
             </div>
         </div>
     </div>
 
-    <button onclick="toggleAI()" class="fixed bottom-8 right-8 w-16 h-16 rounded-full bg-gradient-to-tr from-indigo-600 to-purple-600 text-white shadow-[0_0_20px_rgba(99,102,241,0.5)] flex items-center justify-center text-2xl hover:scale-110 hover:shadow-[0_0_35px_rgba(99,102,241,0.8)] transition-all duration-300 z-[1001] group border border-white/10">
-        <i class="fas fa-robot group-hover:rotate-12 transition-transform duration-300"></i>
+    <button onclick="toggleAIPanel()" class="fixed bottom-8 right-8 w-16 h-16 rounded-full bg-gradient-to-tr from-indigo-600 to-purple-600 text-white shadow-2xl flex items-center justify-center text-2xl hover:scale-110 transition-all z-[1001] border border-white/10 group">
+        <i class="fas fa-robot group-hover:rotate-12 transition-transform"></i>
     </button>
 
     <div id="ai-panel">
-        <div class="p-4 bg-gradient-to-r from-indigo-900/50 to-purple-900/50 border-b border-white/5 flex justify-between items-center">
-            <div class="flex items-center space-x-3">
-                <div class="w-8 h-8 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 flex items-center justify-center shadow-lg"><i class="fas fa-magic text-xs"></i></div>
-                <span class="font-black italic uppercase tracking-widest text-xs bg-clip-text text-transparent bg-gradient-to-r from-indigo-300 to-purple-300">StudyAI Pro</span>
-            </div>
-            <button onclick="toggleAI()" class="text-slate-400 hover:text-white transition w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center"><i class="fas fa-times"></i></button>
+        <div class="p-4 bg-indigo-900/50 border-b border-white/5 flex justify-between items-center">
+            <span class="font-black italic uppercase tracking-widest text-[10px]">StudyAI Assistant</span>
+            <button onclick="toggleAIPanel()" class="text-slate-400 hover:text-white"><i class="fas fa-times"></i></button>
         </div>
-        
-        <div id="ai-messages" class="flex-1 p-5 overflow-y-auto space-y-4 text-[11px] font-medium">
-            <div class="text-center text-slate-500 text-[10px] uppercase tracking-widest my-4 opacity-50">AI Assistant Ready</div>
+        <div id="ai-messages" class="flex-1 p-5 overflow-y-auto space-y-4 text-[11px]">
+            <div class="text-center text-slate-500 text-[10px] uppercase tracking-widest my-4 opacity-50">Assistant Ready</div>
         </div>
-        
         <div class="p-3 m-3 bg-black/40 border border-white/10 rounded-2xl flex items-center space-x-2">
-            <input id="ai-input" placeholder="Ask AI a question..." autocomplete="off" class="flex-1 bg-transparent outline-none px-2 text-white placeholder-slate-500 text-[11px]">
-            <button onclick="askAI()" class="bg-indigo-600 w-8 h-8 rounded-xl flex items-center justify-center hover:bg-indigo-500 transition shadow-lg"><i class="fas fa-paper-plane text-white text-[10px]"></i></button>
+            <input id="ai-input" placeholder="Ask a question..." autocomplete="off" class="flex-1 bg-transparent outline-none px-2 text-[11px] text-white">
+            <button onclick="askAIAssistant()" class="bg-indigo-600 w-8 h-8 rounded-xl flex items-center justify-center hover:bg-indigo-500 transition shadow-lg">
+                <i class="fas fa-paper-plane text-white text-[10px]"></i>
+            </button>
         </div>
     </div>
 
     <div id="whiteboardContainer">
-        <div class="absolute top-6 right-6 flex space-x-4">
-            <button onclick="clearWhiteboard()" class="bg-red-500 text-white px-8 py-2 rounded-2xl font-black text-xs uppercase shadow-xl">Clear</button>
-            <button onclick="toggleWhiteboard()" class="bg-slate-800 text-white px-8 py-2 rounded-2xl font-black text-xs uppercase">Close</button>
+        <div class="absolute top-6 right-6 flex space-x-4 z-50">
+            <button onclick="clearWhiteboardCanvas()" class="bg-red-500 text-white px-8 py-2 rounded-2xl font-black text-xs uppercase shadow-xl hover:bg-red-400">Reset</button>
+            <button onclick="toggleWhiteboard()" class="bg-slate-800 text-white px-8 py-2 rounded-2xl font-black text-xs uppercase hover:bg-slate-700">Close</button>
         </div>
         <canvas id="wbCanvas" class="w-full h-full cursor-crosshair"></canvas>
     </div>
 
-    <form id="chatForm" class="p-6 bg-slate-900 border-t border-white/5 flex items-center space-x-4 z-20">
-        <label class="cursor-pointer text-slate-400 hover:text-indigo-500 transition px-2">
+    <form id="chatForm" class="p-8 bg-slate-900/95 border-t border-white/5 flex items-center space-x-6 z-20 shadow-2xl">
+        <label class="cursor-pointer text-slate-400 hover:text-indigo-500 transition px-2" title="Attach file">
             <i class="fas fa-paperclip text-lg"></i>
-            <input type="file" class="hidden">
+            <input type="file" class="hidden" id="fileAttachment">
         </label>
-        <input id="messageInput" placeholder="Message your study buddies..." autocomplete="off" class="flex-1 bg-white/5 border border-white/10 rounded-2xl px-6 py-4 outline-none focus:border-indigo-500 transition text-sm">
-        <button class="bg-indigo-600 px-10 py-4 rounded-2xl font-black italic uppercase tracking-widest text-white shadow-xl hover:scale-105 transition">Send</button>
+        <input id="messageInput" placeholder="Send a message to everyone..." autocomplete="off" class="flex-1 bg-white/5 border border-white/10 rounded-[2rem] px-8 py-5 outline-none focus:border-indigo-500 transition text-sm text-white">
+        <button class="bg-indigo-600 px-12 py-5 rounded-[2rem] font-black italic uppercase tracking-widest text-white shadow-xl hover:scale-105 transition">SEND</button>
     </form>
 
     <script>
-    const socket = io();
-    const username = localStorage.getItem('username');
-    const room = new URLSearchParams(window.location.search).get('room');
-    const myPeer = new Peer(undefined, { host: '0.peerjs.com', port: 443, secure: true }); 
-
-    const videoGrid = document.getElementById('video-grid');
-    const screenContainer = document.getElementById('screen-container');
-    const screenVideo = document.getElementById('screen-video');
-    const toast = document.getElementById('share-toast');
-
-    let localStream, screenStream, isMicOn = true, isVideoOn = false;
-    let myVideo = document.createElement('video');
-    myVideo.muted = true; myVideo.className = "camera-stream";
-
-    socket.emit('join room', { username, room });
-    document.getElementById('roomTitle').textContent = room;
-
-    function showToast(msg) {
-        document.getElementById('toast-msg').textContent = msg;
-        toast.classList.add('show');
-        setTimeout(() => toast.classList.remove('show'), 4000);
-    }
-
-    // Draggable Logic
-    let drag = false, ox, oy;
-    videoGrid.onmousedown = e => { if(e.target.tagName==='VIDEO') return; drag=true; ox=e.clientX-videoGrid.offsetLeft; oy=e.clientY-videoGrid.offsetTop; };
-    document.onmousemove = e => { if(drag){ videoGrid.style.left=(e.clientX-ox)+'px'; videoGrid.style.top=(e.clientY-oy)+'px'; videoGrid.style.right='auto'; } };
-    document.onmouseup = () => drag=false;
-
-    // --- PEER & MEDIA ---
-    myPeer.on('call', call => {
-        call.answer(localStream);
-        call.on('stream', s => {
-            if(call.metadata && call.metadata.type === 'screen') {
-                screenContainer.style.display = 'flex';
-                screenVideo.srcObject = s;
-            } else {
-                const v = document.createElement('video');
-                v.className = "camera-stream";
-                v.srcObject = s; v.play(); videoGrid.append(v);
-            }
-        });
-    });
-
-    socket.on('user-connected', userId => { if(localStream) connectToNewUser(userId, localStream); });
-
-    async function toggleVideo() {
-        if(!localStream) {
-            localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-            myVideo.srcObject = localStream;
-            myVideo.play(); videoGrid.append(myVideo);
-            socket.emit('user-joined-media', { userId: myPeer.id, room });
-            isVideoOn = true;
-            document.getElementById('vBtn').classList.add('bg-indigo-600');
-        } else {
-            localStream.getTracks().forEach(t => t.stop());
-            myVideo.remove(); localStream = null; isVideoOn = false;
-            document.getElementById('vBtn').classList.remove('bg-indigo-600');
-        }
-    }
-
-    function toggleMic() {
-        if(!localStream) return alert("Pehle camera on karo!");
-        isMicOn = !isMicOn;
-        localStream.getAudioTracks()[0].enabled = isMicOn;
-        document.getElementById('mBtn').textContent = isMicOn ? "🎤 VOICE ON" : "🔇 MUTED";
-        document.getElementById('mBtn').classList.toggle('bg-red-500', !isMicOn);
-    }
-
-    function connectToNewUser(userId, stream) {
-        const call = myPeer.call(userId, stream);
-        const v = document.createElement('video');
-        v.className = "camera-stream";
-        call.on('stream', s => { v.srcObject = s; v.play(); videoGrid.append(v); });
-    }
-
-    // --- SCREEN SHARE ---
-    async function startScreenShare() {
-        try {
-            screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-            screenContainer.style.display = 'flex';
-            screenVideo.srcObject = screenStream;
-            socket.emit('screen-share-start', { user: username, room });
-            for(let id in myPeer.connections) { myPeer.call(id, screenStream, { metadata: { type: 'screen' } }); }
-            screenStream.getVideoTracks()[0].onended = () => stopScreenShare();
-        } catch (e) { console.log(e); }
-    }
-
-    function stopScreenShare() {
-        if(screenStream) screenStream.getTracks().forEach(t => t.stop());
-        screenContainer.style.display = 'none';
-        socket.emit('screen-share-stop', { user: username, room });
-    }
-
-    socket.on('notify-share-start', d => showToast(`${d.user} STARTING SCREEN SHARE!`));
-    socket.on('notify-share-stop', d => { showToast(`${d.user} STOPPED SHARING.`); screenContainer.style.display = 'none'; });
-
-    // --- CHAT & USERS ---
-    socket.on('chat message', d => {
-        const isMe = d.user === username;
-        const div = document.createElement('div');
-        div.className = `flex ${isMe ? 'justify-end' : 'justify-start'} mb-6`;
-        div.innerHTML = `<div class="${isMe ? 'bg-indigo-600 shadow-lg' : 'bg-slate-800'} p-4 rounded-2xl max-w-sm border border-white/5"><p class="text-[8px] font-black uppercase opacity-50 mb-1">${d.user}</p><p class="text-[13px]">${d.msg}</p></div>`;
-        document.getElementById('chatBox').appendChild(div);
-        document.getElementById('chatBox').scrollTop = document.getElementById('chatBox').scrollHeight;
-    });
-
-    document.getElementById('chatForm').onsubmit = e => {
-        e.preventDefault();
-        const msg = document.getElementById('messageInput').value;
-        if(msg.trim()) { socket.emit('chat message', { user: username, msg, room }); document.getElementById('messageInput').value = ''; }
-    };
-
-    socket.on('update user list', u => {
-        document.getElementById('userList').innerHTML = u.map(x => `<li class="flex items-center space-x-3 bg-white/5 p-3 rounded-xl border border-white/5"><div class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div><span class="text-[10px] font-black uppercase tracking-widest">${x.username}</span></li>`).join('');
-    });
-
-    socket.on('load history', h => h.forEach(d => { /* Load history */ }));
-
-    async function clearChat() { if(confirm("Clear chat?")) { await fetch(`/clear-chat/${room}`, { method: 'DELETE' }); document.getElementById('chatBox').innerHTML = ''; } }
-
-    // --- 🔥 NEW PRO AI LOGIC 🔥 ---
-    function toggleAI() { 
-        const p = document.getElementById('ai-panel'); 
-        p.classList.toggle('ai-active');
-    }
+    // --- INITIALIZATION ---
+    const socket = io(); 
+    const currentUser = localStorage.getItem('username') || 'Unknown Student'; 
+    const currentRoom = new URLSearchParams(window.location.search).get('room') || 'General';
     
-    // Send message on Enter key
-    document.getElementById('ai-input').addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') askAI();
+    const myPeer = new Peer(undefined, { host: '0.peerjs.com', port: 443, secure: true }); 
+    
+    const videoGridContainer = document.getElementById('video-grid'); 
+    const screenDisplayContainer = document.getElementById('screen-container'); 
+    const screenVideoPlayer = document.getElementById('screen-video'); 
+    const notificationToast = document.getElementById('share-toast');
+
+    let userMediaStream, displayMediaStream;
+    let isMicrophoneActive = true;
+    
+    const localVideoElement = document.createElement('video'); 
+    localVideoElement.muted = true; 
+    localVideoElement.className = "camera-stream";
+
+    socket.emit('join room', { username: currentUser, room: currentRoom }); 
+    document.getElementById('roomTitle').textContent = currentRoom;
+
+    // --- UI NOTIFICATIONS ---
+    function triggerNotification(message) { 
+        document.getElementById('toast-msg').textContent = message; 
+        notificationToast.classList.add('show'); 
+        setTimeout(() => {
+            notificationToast.classList.remove('show');
+        }, 4000); 
+    }
+
+    // --- DRAGGABLE VIDEO GRID ---
+    let isDraggingGrid = false, offsetX, offsetY; 
+    videoGridContainer.addEventListener('mousedown', (e) => { 
+        if (e.target.tagName === 'VIDEO') return; 
+        isDraggingGrid = true; 
+        offsetX = e.clientX - videoGridContainer.offsetLeft; 
+        offsetY = e.clientY - videoGridContainer.offsetTop; 
+    });
+    document.addEventListener('mousemove', (e) => { 
+        if (isDraggingGrid) { 
+            videoGridContainer.style.left = (e.clientX - offsetX) + 'px'; 
+            videoGridContainer.style.top = (e.clientY - offsetY) + 'px'; 
+            videoGridContainer.style.right = 'auto'; 
+        } 
+    });
+    document.addEventListener('mouseup', () => {
+        isDraggingGrid = false;
     });
 
-    async function askAI() {
-        const i = document.getElementById('ai-input'), b = document.getElementById('ai-messages');
-        const v = i.value; if(!v) return;
-        
-        // User Message Bubble
-        b.innerHTML += `<div class="flex justify-end mb-3"><div class="bg-indigo-600 text-white px-4 py-2.5 rounded-2xl rounded-tr-sm text-[11px] shadow-md max-w-[85%]">${v}</div></div>`;
-        i.value = "Thinking...";
-        b.scrollTop = b.scrollHeight;
+    // --- WEBRTC PEER CONNECTION HANDLING ---
+    myPeer.on('call', (call) => { 
+        call.answer(userMediaStream); 
+        call.on('stream', (incomingStream) => { 
+            if (call.metadata && call.metadata.type === 'screen') { 
+                screenDisplayContainer.style.display = 'flex'; 
+                screenVideoPlayer.srcObject = incomingStream; 
+            } else { 
+                const newVideoElement = document.createElement('video'); 
+                newVideoElement.className = "camera-stream"; 
+                newVideoElement.srcObject = incomingStream; 
+                newVideoElement.play(); 
+                videoGridContainer.append(newVideoElement); 
+            } 
+        }); 
+    });
 
-        try {
-            const res = await fetch('/ask-ai', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ prompt: v }) });
-            const d = await res.json();
+    socket.on('user-connected', (userId) => { 
+        if (userMediaStream) {
+            connectToNewPeer(userId, userMediaStream); 
+        }
+    });
+
+    // --- MEDIA CONTROLS ---
+    async function toggleCamera() { 
+        if (!userMediaStream) { 
+            try {
+                userMediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true }); 
+                localVideoElement.srcObject = userMediaStream; 
+                localVideoElement.play(); 
+                videoGridContainer.append(localVideoElement); 
+                socket.emit('user-joined-media', { userId: myPeer.id, room: currentRoom }); 
+                document.getElementById('vBtn').classList.add('bg-indigo-600'); 
+            } catch (error) {
+                alert("Camera permission denied.");
+            }
+        } else { 
+            userMediaStream.getTracks().forEach(track => track.stop()); 
+            localVideoElement.remove(); 
+            userMediaStream = null; 
+            document.getElementById('vBtn').classList.remove('bg-indigo-600'); 
+        } 
+    }
+
+    function toggleMicrophone() { 
+        if (!userMediaStream) {
+            alert("Please enable the camera first to activate the microphone.");
+            return;
+        }
+        isMicrophoneActive = !isMicrophoneActive; 
+        userMediaStream.getAudioTracks()[0].enabled = isMicrophoneActive; 
+        document.getElementById('mBtn').textContent = isMicrophoneActive ? "🎤 VOICE ACTIVE" : "🔇 MUTED"; 
+        document.getElementById('mBtn').classList.toggle('bg-red-500', !isMicrophoneActive); 
+    }
+
+    function connectToNewPeer(userId, stream) { 
+        const call = myPeer.call(userId, stream); 
+        const peerVideo = document.createElement('video'); 
+        peerVideo.className = "camera-stream"; 
+        call.on('stream', (incomingStream) => { 
+            peerVideo.srcObject = incomingStream; 
+            peerVideo.play(); 
+            videoGridContainer.append(peerVideo); 
+        }); 
+    }
+
+    // --- SCREEN SHARING ---
+    async function startScreenShare() { 
+        try { 
+            displayMediaStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true }); 
+            screenDisplayContainer.style.display = 'flex'; 
+            screenVideoPlayer.srcObject = displayMediaStream; 
+            socket.emit('screen-share-start', { user: currentUser, room: currentRoom }); 
+            
+            for (let id in myPeer.connections) { 
+                myPeer.call(id, displayMediaStream, { metadata: { type: 'screen' } }); 
+            } 
+            
+            displayMediaStream.getVideoTracks()[0].onended = () => {
+                stopScreenShare();
+            }; 
+        } catch (e) {
+            console.log("Screen sharing cancelled by user.");
+        } 
+    }
+
+    function stopScreenShare() { 
+        if (displayMediaStream) {
+            displayMediaStream.getTracks().forEach(track => track.stop()); 
+        }
+        screenDisplayContainer.style.display = 'none'; 
+        socket.emit('screen-share-stop', { user: currentUser, room: currentRoom }); 
+    }
+
+    socket.on('notify-share-start', (data) => {
+        triggerNotification(`${data.user} has started presenting their screen.`);
+    });
+    
+    socket.on('notify-share-stop', (data) => { 
+        triggerNotification(`${data.user} has stopped presenting.`); 
+        screenDisplayContainer.style.display = 'none'; 
+    });
+
+    // --- CHAT SYSTEM ---
+    function appendChatMessage(data) {
+        const isCurrentUser = data.user === currentUser; 
+        const messageContainer = document.createElement('div'); 
+        messageContainer.className = `flex ${isCurrentUser ? 'justify-end' : 'justify-start'} mb-6`; 
+        
+        messageContainer.innerHTML = `
+            <div class="${isCurrentUser ? 'bg-indigo-600 shadow-xl' : 'bg-slate-800'} p-5 rounded-2xl max-w-sm border border-white/5">
+                <p class="text-[8px] font-black uppercase opacity-50 mb-1 tracking-widest">${data.user}</p>
+                <p class="text-[13px] leading-relaxed">${data.msg}</p>
+            </div>
+        `; 
+        
+        document.getElementById('chatBox').appendChild(messageContainer); 
+        document.getElementById('chatBox').scrollTop = document.getElementById('chatBox').scrollHeight; 
+    }
+
+    socket.on('chat message', (data) => {
+        appendChatMessage(data);
+    });
+
+    socket.on('load history', (historyArray) => {
+        historyArray.forEach(data => appendChatMessage(data));
+    });
+
+    document.getElementById('chatForm').addEventListener('submit', (e) => { 
+        e.preventDefault(); 
+        const messageText = document.getElementById('messageInput').value; 
+        if (messageText.trim()) { 
+            socket.emit('chat message', { user: currentUser, msg: messageText, room: currentRoom }); 
+            document.getElementById('messageInput').value = ''; 
+        } 
+    });
+
+    // --- ACTIVE USERS LIST ---
+    socket.on('update user list', (usersArray) => { 
+        document.getElementById('userList').innerHTML = usersArray.map(user => `
+            <li class="flex items-center space-x-4 bg-white/5 p-4 rounded-2xl border border-white/5">
+                <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse shadow-[0_0_10px_green]"></div>
+                <span class="text-[10px] font-black uppercase tracking-widest italic">${user.username}</span>
+            </li>
+        `).join(''); 
+    });
+
+    async function clearChatHistory() { 
+        if (confirm("Are you sure you want to permanently clear the chat history for this room?")) { 
+            await fetch(`/clear-chat/${currentRoom}`, { method: 'DELETE' }); 
+            document.getElementById('chatBox').innerHTML = ''; 
+        } 
+    }
+
+    // --- AI ASSISTANT ---
+    function toggleAIPanel() { 
+        document.getElementById('ai-panel').classList.toggle('ai-active'); 
+    }
+
+    async function askAIAssistant() { 
+        const inputField = document.getElementById('ai-input');
+        const messageBox = document.getElementById('ai-messages'); 
+        const queryText = inputField.value; 
+        
+        if (!queryText) return; 
+        
+        // User Query Bubble
+        messageBox.innerHTML += `
+            <div class="flex justify-end mb-3">
+                <div class="bg-indigo-600 text-white px-4 py-2 rounded-2xl text-[11px] shadow-md max-w-[85%]">${queryText}</div>
+            </div>
+        `; 
+        
+        inputField.value = "Processing request..."; 
+        messageBox.scrollTop = messageBox.scrollHeight;
+        
+        try { 
+            const response = await fetch('/ask-ai', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({ prompt: queryText }) 
+            }); 
+            
+            const data = await response.json(); 
             
             // AI Response Bubble
-            b.innerHTML += `<div class="flex justify-start mb-4"><div class="bg-slate-800/80 border border-indigo-500/30 text-slate-200 px-4 py-3 rounded-2xl rounded-tl-sm text-[11px] shadow-lg max-w-[90%] leading-relaxed"><i class="fas fa-sparkles text-indigo-400 mr-1"></i> ${d.answer}</div></div>`;
-        } catch (err) {
-            b.innerHTML += `<div class="flex justify-start mb-4"><div class="bg-red-500/20 border border-red-500/50 text-red-200 px-4 py-2 rounded-2xl rounded-tl-sm text-[11px]">Server Error!</div></div>`;
-        }
-        i.value = ""; b.scrollTop = b.scrollHeight;
+            messageBox.innerHTML += `
+                <div class="flex justify-start mb-4">
+                    <div class="bg-slate-800/80 border border-indigo-500/30 text-slate-200 px-4 py-3 rounded-2xl text-[11px] shadow-lg leading-relaxed max-w-[90%]">
+                        <i class="fas fa-magic text-indigo-400 mr-2"></i>${data.answer}
+                    </div>
+                </div>
+            `; 
+        } catch (error) { 
+            messageBox.innerHTML += `
+                <div class="text-red-400 text-[10px] text-center my-2">Error connecting to AI service. Please try again.</div>
+            `; 
+        } 
+        
+        inputField.value = ""; 
+        messageBox.scrollTop = messageBox.scrollHeight; 
     }
 
-    const canvas = document.getElementById('wbCanvas'); const ctx = canvas.getContext('2d');
-    let drawing = false;
-    function toggleWhiteboard() { const wb = document.getElementById('whiteboardContainer'); wb.style.display = wb.style.display==='block' ? 'none' : 'block'; if(wb.style.display==='block'){canvas.width=canvas.offsetWidth;canvas.height=canvas.offsetHeight;} }
-    canvas.onmousedown = () => drawing = true; canvas.onmouseup = () => { drawing = false; ctx.beginPath(); };
-    canvas.onmousemove = e => { if(!drawing) return; ctx.lineWidth=3; ctx.lineCap='round'; ctx.strokeStyle='#000'; ctx.lineTo(e.clientX-canvas.offsetLeft-(window.innerWidth*0.05), e.clientY-canvas.offsetTop-(window.innerHeight*0.05)); ctx.stroke(); };
-    function clearWhiteboard() { ctx.clearRect(0,0,canvas.width,canvas.height); }
+    // Add enter key listener for AI
+    document.getElementById('ai-input').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            askAIAssistant();
+        }
+    });
+
+    // --- WHITEBOARD SYSTEM ---
+    const canvasElement = document.getElementById('wbCanvas'); 
+    const canvasContext = canvasElement.getContext('2d'); 
+    let isDrawingOnBoard = false;
+    
+    function toggleWhiteboard() { 
+        const whiteboardContainer = document.getElementById('whiteboardContainer'); 
+        if (whiteboardContainer.style.display === 'block') {
+            whiteboardContainer.style.display = 'none';
+        } else {
+            whiteboardContainer.style.display = 'block';
+            canvasElement.width = canvasElement.offsetWidth;
+            canvasElement.height = canvasElement.offsetHeight;
+        }
+    }
+
+    canvasElement.addEventListener('mousedown', () => {
+        isDrawingOnBoard = true;
+    });
+    
+    canvasElement.addEventListener('mouseup', () => { 
+        isDrawingOnBoard = false; 
+        canvasContext.beginPath(); 
+    });
+
+    canvasElement.addEventListener('mousemove', (e) => { 
+        if (!isDrawingOnBoard) return; 
+        
+        canvasContext.lineWidth = 3; 
+        canvasContext.lineCap = 'round'; 
+        canvasContext.strokeStyle = '#000'; 
+        
+        const rect = canvasElement.getBoundingClientRect();
+        canvasContext.lineTo(e.clientX - rect.left, e.clientY - rect.top); 
+        canvasContext.stroke(); 
+    });
+
+    function clearWhiteboardCanvas() { 
+        canvasContext.clearRect(0, 0, canvasElement.width, canvasElement.height); 
+    }
     </script>
 </body>
 </html>

@@ -2,12 +2,13 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>StudyPortal Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - StudyPortal</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        body { background: #0f172a; color: white; font-family: sans-serif; }
-        .glass-card { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 2.5rem; transition: 0.3s; }
+        body { background: #0f172a; color: white; font-family: 'Inter', sans-serif; }
+        .glass-card { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(15px); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 2.5rem; transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
         .glass-card:hover { transform: translateY(-8px); border-color: #6366f1; }
         #editModal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 100; align-items: center; justify-content: center; }
     </style>
@@ -15,78 +16,101 @@
 <body class="p-8">
 
     <header class="max-w-6xl mx-auto flex justify-between items-center mb-16">
-        <h1 class="text-3xl font-black italic tracking-tighter uppercase">STUDY<span class="text-indigo-500">PORTAL</span></h1>
-        <button onclick="logout()" class="bg-red-500/10 text-red-500 px-8 py-2 rounded-full text-xs font-bold border border-red-500/20">Logout</button>
+        <h1 class="text-3xl font-black italic tracking-tighter uppercase text-indigo-500">STUDYPORTAL</h1>
+        <button onclick="logoutUser()" class="bg-red-500/10 text-red-500 px-8 py-2 rounded-full font-bold border border-red-500/20 hover:bg-red-500 hover:text-white transition">Sign Out</button>
     </header>
 
     <main class="max-w-6xl mx-auto space-y-10">
-        <div class="glass-card p-10 flex items-center space-x-12 relative overflow-hidden">
+        <div class="glass-card p-12 flex items-center space-x-12 relative overflow-hidden">
             <div class="relative">
-                <img id="profileImg" src="" class="w-36 h-36 rounded-[2.5rem] object-cover border-4 border-indigo-500/20">
+                <img id="profileImg" src="" class="w-36 h-36 rounded-[2.5rem] object-cover border-4 border-indigo-500/20 shadow-2xl">
                 <button onclick="openModal()" class="absolute -bottom-2 -right-2 bg-indigo-600 w-12 h-12 rounded-2xl flex items-center justify-center border-4 border-[#0f172a] shadow-xl hover:scale-110 transition">
                     <i class="fas fa-pencil-alt text-white"></i>
                 </button>
             </div>
             <div>
-                <h2 id="welcomeText" class="text-5xl font-black italic mb-2 tracking-tight">Loading...</h2>
-                <p id="bioText" class="text-slate-400 text-lg italic mb-4">"Ready for a session?"</p>
-                <p id="emailDisp" class="text-[10px] font-bold text-indigo-400 uppercase tracking-widest bg-indigo-500/10 px-4 py-2 rounded-full inline-block"></p>
+                <h2 id="welcomeText" class="text-5xl font-black italic mb-2 tracking-tight">Welcome...</h2>
+                <p id="bioText" class="text-slate-400 text-lg italic mb-4">"Ready to learn."</p>
+                <div class="inline-flex items-center space-x-2 bg-indigo-500/10 px-4 py-1.5 rounded-full">
+                    <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                    <span id="emailDisp" class="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">Loading...</span>
+                </div>
             </div>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div onclick="location.href='studyroom.html?room=Calculus'" class="glass-card p-12 group cursor-pointer h-72 flex flex-col justify-between hover:border-indigo-500">
+            <div onclick="location.href='studyroom.html?room=Calculus'" class="glass-card p-12 group cursor-pointer h-72 flex flex-col justify-between">
                 <div>
-                    <h3 class="text-3xl font-black italic group-hover:text-indigo-400 transition uppercase">Calculus Room</h3>
-                    <p class="text-slate-500 mt-2 font-medium italic">Click to enter the session.</p>
+                    <h3 class="text-3xl font-black italic group-hover:text-indigo-400 transition uppercase tracking-tighter">Calculus Hub</h3>
+                    <p class="text-slate-500 mt-2 font-medium">Join the live session for Derivatives and Integration.</p>
                 </div>
-                <button class="bg-indigo-600 py-4 rounded-2xl font-black uppercase text-xs italic tracking-widest">Join Now</button>
+                <button class="bg-indigo-600 py-4 rounded-2xl font-black uppercase text-xs tracking-widest">Enter Room</button>
             </div>
-            <div onclick="location.href='studyroom.html?room=Java'" class="glass-card p-12 group cursor-pointer h-72 flex flex-col justify-between hover:border-indigo-500">
+            <div onclick="location.href='studyroom.html?room=Java'" class="glass-card p-12 group cursor-pointer h-72 flex flex-col justify-between">
                 <div>
-                    <h3 class="text-3xl font-black italic group-hover:text-indigo-400 transition uppercase">Java Masters</h3>
-                    <p class="text-slate-500 mt-2 font-medium italic">Click to enter the session.</p>
+                    <h3 class="text-3xl font-black italic group-hover:text-indigo-400 transition uppercase tracking-tighter">Java Masters</h3>
+                    <p class="text-slate-500 mt-2 font-medium">Deep dive into Object-Oriented Programming.</p>
                 </div>
-                <button class="bg-indigo-600 py-4 rounded-2xl font-black uppercase text-xs italic tracking-widest">Join Now</button>
+                <button class="bg-indigo-600 py-4 rounded-2xl font-black uppercase text-xs tracking-widest">Enter Room</button>
             </div>
         </div>
     </main>
 
     <div id="editModal">
         <div class="bg-slate-900 p-10 rounded-[2.5rem] border border-indigo-500 w-96 shadow-2xl">
-            <h3 class="text-xl font-black mb-6 italic uppercase text-center">Update Profile</h3>
-            <div class="space-y-4">
-                <input id="newBio" placeholder="New Bio..." class="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-sm outline-none focus:border-indigo-500 transition">
-                <input id="newPic" placeholder="Profile Pic URL..." class="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-sm outline-none focus:border-indigo-500 transition">
+            <h3 class="text-xl font-black mb-8 italic uppercase text-center tracking-widest">Update Profile</h3>
+            <div class="space-y-5">
+                <input id="newBio" placeholder="Short professional bio..." class="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-sm outline-none focus:border-indigo-500 transition">
+                <input id="newPic" placeholder="Profile image URL..." class="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-sm outline-none focus:border-indigo-500 transition">
             </div>
-            <div class="flex space-x-3 mt-10">
-                <button onclick="closeModal()" class="flex-1 text-xs font-bold opacity-40 uppercase">Cancel</button>
-                <button onclick="saveProfile()" class="flex-1 bg-indigo-600 py-4 rounded-2xl font-bold text-xs uppercase shadow-xl">Save</button>
+            <div class="flex space-x-4 mt-10">
+                <button onclick="closeModal()" class="flex-1 text-xs font-bold opacity-50 uppercase tracking-widest">Cancel</button>
+                <button onclick="saveProfile()" class="flex-1 bg-indigo-600 py-4 rounded-2xl font-bold text-xs uppercase tracking-widest shadow-xl hover:bg-indigo-500 transition">Save Changes</button>
             </div>
         </div>
     </div>
 
     <script>
-        const username = localStorage.getItem('username') || "Student";
-        const userEmail = localStorage.getItem('userEmail') || "Login again";
+        const storedUser = localStorage.getItem('username');
+        const storedEmail = localStorage.getItem('userEmail');
+        
+        document.getElementById('welcomeText').textContent = `Hello, ${storedUser}!`;
+        document.getElementById('emailDisp').textContent = storedEmail || "No Email Available";
+        
+        const avatarUrl = localStorage.getItem('userPic') || `https://ui-avatars.com/api/?name=${storedUser}&background=6366f1&color=fff&size=200&bold=true`;
+        document.getElementById('profileImg').src = avatarUrl;
+        
+        const userBio = localStorage.getItem('userBio') || "Always learning, always growing!";
+        document.getElementById('bioText').textContent = `"${userBio}"`;
 
-        document.getElementById('welcomeText').textContent = `Hi, ${username}!`;
-        document.getElementById('emailDisp').textContent = userEmail;
-        document.getElementById('profileImg').src = localStorage.getItem('userPic') || `https://ui-avatars.com/api/?name=${username}&background=6366f1&color=fff&size=200&bold=true`;
-        document.getElementById('bioText').textContent = `"${localStorage.getItem('userBio') || "Always learning!"}"`;
-
-        function openModal() { document.getElementById('editModal').style.display = 'flex'; }
-        function closeModal() { document.getElementById('editModal').style.display = 'none'; }
+        function openModal() { 
+            document.getElementById('editModal').style.display = 'flex'; 
+        }
+        
+        function closeModal() { 
+            document.getElementById('editModal').style.display = 'none'; 
+        }
         
         function saveProfile() {
-            const b = document.getElementById('newBio').value;
-            const p = document.getElementById('newPic').value;
-            if(b) { localStorage.setItem('userBio', b); document.getElementById('bioText').textContent = `"${b}"`; }
-            if(p) { localStorage.setItem('userPic', p); document.getElementById('profileImg').src = p; }
+            const bioInput = document.getElementById('newBio').value;
+            const picInput = document.getElementById('newPic').value;
+            
+            if (bioInput) { 
+                localStorage.setItem('userBio', bioInput); 
+                document.getElementById('bioText').textContent = `"${bioInput}"`; 
+            }
+            if (picInput) { 
+                localStorage.setItem('userPic', picInput); 
+                document.getElementById('profileImg').src = picInput; 
+            }
+            
             closeModal();
         }
-
-        function logout() { localStorage.clear(); window.location.href = 'login.html'; }
+        
+        function logoutUser() { 
+            localStorage.clear(); 
+            window.location.href = 'login.html'; 
+        }
     </script>
 </body>
 </html>
