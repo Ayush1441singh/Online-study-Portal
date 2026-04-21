@@ -776,12 +776,48 @@ io.on('connection', (socket) => {
 
         const alreadyTracked = activeRooms[room].some((user) => user.id === socket.id);
         if (!alreadyTracked) {
-            activeRooms[room].push({ id: socket.id, username: socket.user.username });
+            activeRooms[room].push({
+                id: socket.id,
+                username: socket.user.username,
+                peerId: null,
+                hasMedia: false,
+            });
         }
 
         const history = await Message.find({ room }).sort({ timestamp: 1 }).limit(200).lean();
         socket.emit('load history', history);
-        io.to(room).emit('update user list', activeRooms[room]);
+        io.to(room).emit('room-state', activeRooms[room]);
+    });
+
+    socket.on('peer-ready', (data) => {
+        const room = sanitizeRoomName(data && data.room);
+        const peerId = ensureText(data && data.peerId, { min: 2, max: 200 });
+        if (!room || !peerId || !activeRooms[room]) {
+            return;
+        }
+
+        const participant = activeRooms[room].find((user) => user.id === socket.id);
+        if (!participant) {
+            return;
+        }
+
+        participant.peerId = peerId;
+        io.to(room).emit('room-state', activeRooms[room]);
+    });
+
+    socket.on('media-state-change', (data) => {
+        const room = sanitizeRoomName(data && data.room);
+        if (!room || !activeRooms[room]) {
+            return;
+        }
+
+        const participant = activeRooms[room].find((user) => user.id === socket.id);
+        if (!participant) {
+            return;
+        }
+
+        participant.hasMedia = Boolean(data && data.hasMedia);
+        io.to(room).emit('room-state', activeRooms[room]);
     });
 
     socket.on('chat message', async (data) => {
@@ -842,12 +878,17 @@ io.on('connection', (socket) => {
 
     socket.on('user-joined-media', (data) => {
         const room = sanitizeRoomName(data && data.room);
-        const userId = ensureText(data && data.userId, { min: 2, max: 200 });
-        if (!room || !userId || socket.data.room !== room) {
+        if (!room || !activeRooms[room]) {
             return;
         }
 
-        socket.to(room).emit('user-connected', userId);
+        const participant = activeRooms[room].find((user) => user.id === socket.id);
+        if (!participant) {
+            return;
+        }
+
+        participant.hasMedia = true;
+        io.to(room).emit('room-state', activeRooms[room]);
     });
 
     socket.on('disconnect', () => {
@@ -855,7 +896,7 @@ io.on('connection', (socket) => {
             const nextUsers = activeRooms[room].filter((user) => user.id !== socket.id);
             if (nextUsers.length !== activeRooms[room].length) {
                 activeRooms[room] = nextUsers;
-                io.to(room).emit('update user list', activeRooms[room]);
+                io.to(room).emit('room-state', activeRooms[room]);
 
                 if (!activeRooms[room].length) {
                     delete activeRooms[room];
