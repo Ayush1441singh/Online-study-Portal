@@ -37,15 +37,16 @@
                 radial-gradient(circle at top right, rgba(41, 93, 255, 0.08), transparent 18%),
                 radial-gradient(circle at bottom right, rgba(245, 181, 76, 0.08), transparent 22%),
                 linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 100%);
-            overflow: hidden;
+            overflow-y: auto;
+            overflow-x: hidden;
         }
 
         .shell {
             display: grid;
-            grid-template-columns: 170px minmax(0, 1fr) 500px;
+            grid-template-columns: 220px minmax(0, 1fr) 380px;
             grid-template-rows: auto 1fr;
             gap: 16px;
-            height: 100vh;
+            min-height: 100vh;
             padding: 16px;
         }
 
@@ -178,7 +179,7 @@
             flex-direction: column;
             gap: 14px;
             min-height: 0;
-            overflow: hidden;
+            overflow: visible;
         }
 
         .eyebrow {
@@ -636,12 +637,10 @@
             min-height: 0;
             display: flex;
             flex-direction: column;
-            gap: 14px;
+            gap: 12px;
             padding: 16px;
             border-radius: 24px;
-            background:
-                radial-gradient(circle at top right, rgba(245, 181, 76, 0.08), transparent 22%),
-                linear-gradient(180deg, rgba(255,255,255,0.92), rgba(246,249,255,0.96));
+            background: linear-gradient(180deg, rgba(255,255,255,0.95), rgba(246,249,255,0.98));
             border: 1px solid rgba(20, 36, 59, 0.06);
         }
 
@@ -654,11 +653,6 @@
             color: var(--muted);
             font-size: 13px;
             line-height: 1.5;
-        }
-
-        .study-toolkit {
-            display: grid;
-            gap: 12px;
         }
 
         .tool-card {
@@ -746,6 +740,44 @@
             gap: 10px;
             color: var(--muted);
             font-size: 11px;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(20, 36, 59, 0.32);
+            backdrop-filter: blur(8px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            z-index: 1300;
+        }
+
+        .modal-overlay.open {
+            display: flex;
+        }
+
+        .modal-card {
+            width: min(720px, 100%);
+            max-height: min(82vh, 900px);
+            overflow: auto;
+            padding: 20px;
+            border-radius: 28px;
+            background: rgba(255,255,255,0.97);
+            border: 1px solid rgba(20, 36, 59, 0.08);
+            box-shadow: 0 28px 70px rgba(20, 36, 59, 0.18);
+        }
+
+        .modal-card.ai-card {
+            width: min(680px, 100%);
+        }
+
+        .zoom-copy {
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.5;
             font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
         }
 
@@ -958,6 +990,8 @@
                 <button id="cameraBtn" class="btn"><i class="fas fa-video mr-2"></i>Camera</button>
                 <button id="micBtn" class="btn"><i class="fas fa-microphone mr-2"></i>Mic</button>
                 <button id="shareBtn" class="btn primary"><i class="fas fa-display mr-2"></i>Share Screen</button>
+                <button id="notesToggleBtn" class="btn" type="button"><i class="fas fa-note-sticky mr-2"></i>Notes</button>
+                <button id="aiToggleBtn" class="btn" type="button"><i class="fas fa-robot mr-2"></i>AI</button>
                 <div class="menu-wrap">
                     <button id="moreBtn" class="btn menu-btn" type="button" aria-expanded="false" aria-controls="moreMenu"><i class="fas fa-ellipsis-vertical"></i></button>
                     <div id="moreMenu" class="menu-popover">
@@ -1059,50 +1093,12 @@
             <div class="chat-top">
                 <div>
                     <div class="eyebrow">Class Chat</div>
-                    <div class="room-copy mt-2">Bigger chat rail for doubts, answers, and quick notes while the lesson keeps flowing.</div>
+                    <div class="room-copy mt-2">Keep chat open for doubts and short updates while the lesson stays on screen.</div>
                 </div>
-                <button id="aiToggleBtn" class="btn"><i class="fas fa-robot mr-2"></i>Study AI</button>
             </div>
 
             <div class="chat-shell">
-                <div class="chat-highlight">Quick recap, timestamps, and short doubts fit here better now, so the chat feels useful instead of squeezed.</div>
-
-                <div class="study-toolkit">
-                    <div class="tool-card">
-                        <div class="tool-head">
-                            <div class="tool-title">Focus Timer</div>
-                            <div id="focusTimer" class="timer-pill">25:00</div>
-                        </div>
-                        <div class="tool-actions">
-                            <button id="startTimerBtn" class="mini-btn" type="button">Start</button>
-                            <button id="resetTimerBtn" class="mini-btn" type="button">Reset</button>
-                        </div>
-                    </div>
-
-                    <div class="tool-card">
-                        <div class="tool-head">
-                            <div class="tool-title">My Notes</div>
-                            <button id="copyNotesBtn" class="mini-btn" type="button">Copy</button>
-                        </div>
-                        <textarea id="notesInput" class="notes-area" placeholder="Write formulas, key points, doubts, and revision notes here..."></textarea>
-                        <div class="notes-foot">
-                            <span id="notesStatus">Notes are loading...</span>
-                            <span>Auto-save on</span>
-                        </div>
-                    </div>
-
-                    <div class="tool-card">
-                        <div class="tool-head">
-                            <div class="tool-title">Chat Filter</div>
-                        </div>
-                        <div class="filter-row">
-                            <button class="mini-btn active" type="button" data-filter="all">All</button>
-                            <button class="mini-btn" type="button" data-filter="doubt">Doubts</button>
-                            <button class="mini-btn" type="button" data-filter="answer">Answers</button>
-                            <button class="mini-btn" type="button" data-filter="note">Notes</button>
-                        </div>
-                    </div>
-                </div>
+                <div class="chat-highlight">Type normal class chat here. Open `Notes` or `AI` from the top controls when you need them.</div>
 
                 <div id="chatBox" class="chat-box"></div>
 
@@ -1115,23 +1111,57 @@
                 </form>
             </div>
 
-            <div id="aiPanel" class="presence-box hidden">
-                <div class="chat-top">
-                    <div>
-                        <div class="eyebrow">Study AI</div>
-                        <div class="room-copy mt-2">Summaries, explanations, and quick concept help.</div>
-                    </div>
-                    <button id="closeAiBtn" class="btn">Close</button>
+        </aside>
+    </div>
+
+    <div id="notesModal" class="modal-overlay">
+        <div class="modal-card">
+            <div class="chat-top">
+                <div>
+                    <div class="eyebrow">Study Notes</div>
+                    <div class="zoom-copy">Keep your formulas, key points, and revision notes in one clean place.</div>
                 </div>
-
-                <div id="aiMessages" class="chat-box mt-3" style="height: 220px;"></div>
-
-                <div class="chat-input mt-3">
-                    <input id="aiInput" placeholder="Ask about the topic being discussed...">
-                    <button id="askAiBtn" class="btn primary" type="button">Ask</button>
+                <button id="closeNotesBtn" class="btn" type="button">Close</button>
+            </div>
+            <div class="tool-card mt-4">
+                <div class="tool-head">
+                    <div class="tool-title">Focus Timer</div>
+                    <div id="focusTimer" class="timer-pill">25:00</div>
+                </div>
+                <div class="tool-actions">
+                    <button id="startTimerBtn" class="mini-btn" type="button">Start</button>
+                    <button id="resetTimerBtn" class="mini-btn" type="button">Reset</button>
+                    <button id="copyNotesBtn" class="mini-btn" type="button">Copy Notes</button>
                 </div>
             </div>
-        </aside>
+            <div class="tool-card mt-4">
+                <div class="tool-head">
+                    <div class="tool-title">My Notes</div>
+                </div>
+                <textarea id="notesInput" class="notes-area" placeholder="Write formulas, key points, doubts, and revision notes here..."></textarea>
+                <div class="notes-foot">
+                    <span id="notesStatus">Notes are loading...</span>
+                    <span>Auto-save on</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="aiModal" class="modal-overlay">
+        <div class="modal-card ai-card">
+            <div class="chat-top">
+                <div>
+                    <div class="eyebrow">Study AI</div>
+                    <div class="zoom-copy">Ask for explanation, summary, short notes, or quiz questions.</div>
+                </div>
+                <button id="closeAiBtn" class="btn" type="button">Close</button>
+            </div>
+            <div id="aiMessages" class="chat-box mt-4" style="height: 320px;"></div>
+            <div class="chat-input mt-4">
+                <input id="aiInput" placeholder="Ask about the topic being discussed...">
+                <button id="askAiBtn" class="btn primary" type="button">Ask</button>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -1176,7 +1206,8 @@
     const screenPlaceholder = document.getElementById('screenPlaceholder');
     const screenStatus = document.getElementById('screenStatus');
     const toast = document.getElementById('toast');
-    const aiPanel = document.getElementById('aiPanel');
+    const aiModal = document.getElementById('aiModal');
+    const notesModal = document.getElementById('notesModal');
     const aiMessages = document.getElementById('aiMessages');
     const aiInput = document.getElementById('aiInput');
     const notesInput = document.getElementById('notesInput');
@@ -1186,12 +1217,10 @@
     const moreMenu = document.getElementById('moreMenu');
     const stageInfoBtn = document.getElementById('stageInfoBtn');
     const stageInfoMenu = document.getElementById('stageInfoMenu');
-    const filterButtons = [...document.querySelectorAll('[data-filter]')];
 
     roomTitle.textContent = currentRoom;
     roomMetric.textContent = currentRoom.slice(0, 3).toUpperCase();
 
-    state.chatFilter = 'all';
     state.notesSaveTimer = null;
     state.focusDuration = 25 * 60;
     state.focusRemaining = state.focusDuration;
@@ -1228,25 +1257,6 @@
 
     function updateTimerUi() {
         focusTimer.textContent = formatTimer(state.focusRemaining);
-    }
-
-    function inferMessageType(text) {
-        const normalized = (text || '').trim().toLowerCase();
-        if (normalized.startsWith('doubt:') || normalized.startsWith('q:') || normalized.includes('?')) {
-            return 'doubt';
-        }
-        if (normalized.startsWith('answer:') || normalized.startsWith('a:')) {
-            return 'answer';
-        }
-        return 'note';
-    }
-
-    function applyChatFilter() {
-        [...chatBox.children].forEach((message) => {
-            const type = message.dataset.type || 'note';
-            const visible = state.chatFilter === 'all' || state.chatFilter === type;
-            message.classList.toggle('hidden-by-filter', !visible);
-        });
     }
 
     function queueNotesSave() {
@@ -1672,8 +1682,14 @@
         showToast('Screen share stopped.');
     }
 
-    function toggleAIPanel() {
-        aiPanel.classList.toggle('hidden');
+    function toggleAIPanel(forceOpen) {
+        const shouldOpen = typeof forceOpen === 'boolean' ? forceOpen : !aiModal.classList.contains('open');
+        aiModal.classList.toggle('open', shouldOpen);
+    }
+
+    function toggleNotesPanel(forceOpen) {
+        const shouldOpen = typeof forceOpen === 'boolean' ? forceOpen : !notesModal.classList.contains('open');
+        notesModal.classList.toggle('open', shouldOpen);
     }
 
     async function askAI() {
@@ -1713,25 +1729,17 @@
     function addMessageUI(data) {
         const message = document.createElement('div');
         message.className = `message ${data.user === state.currentUser ? 'me' : 'other'}`;
-        const type = inferMessageType(data.msg);
-        message.dataset.type = type;
 
         const author = document.createElement('div');
         author.className = 'message-user';
         author.textContent = data.user;
 
-        const tag = document.createElement('div');
-        tag.className = `message-tag tag-${type}`;
-        tag.textContent = type;
-
         const body = document.createElement('div');
         body.textContent = data.msg;
 
         message.appendChild(author);
-        message.appendChild(tag);
         message.appendChild(body);
         chatBox.appendChild(message);
-        applyChatFilter();
         chatBox.scrollTop = chatBox.scrollHeight;
     }
 
@@ -1827,8 +1835,10 @@
         await clearChat();
     });
     document.getElementById('fullscreenBtn').addEventListener('click', enterFullscreen);
-    document.getElementById('aiToggleBtn').addEventListener('click', toggleAIPanel);
-    document.getElementById('closeAiBtn').addEventListener('click', toggleAIPanel);
+    document.getElementById('aiToggleBtn').addEventListener('click', () => toggleAIPanel(true));
+    document.getElementById('notesToggleBtn').addEventListener('click', () => toggleNotesPanel(true));
+    document.getElementById('closeAiBtn').addEventListener('click', () => toggleAIPanel(false));
+    document.getElementById('closeNotesBtn').addEventListener('click', () => toggleNotesPanel(false));
     document.getElementById('askAiBtn').addEventListener('click', askAI);
     document.getElementById('startTimerBtn').addEventListener('click', () => {
         if (state.focusInterval) {
@@ -1874,13 +1884,6 @@
         }
     });
     notesInput.addEventListener('input', queueNotesSave);
-    filterButtons.forEach((button) => {
-        button.addEventListener('click', () => {
-            state.chatFilter = button.dataset.filter;
-            filterButtons.forEach((item) => item.classList.toggle('active', item === button));
-            applyChatFilter();
-        });
-    });
 
     document.getElementById('chatForm').addEventListener('submit', (event) => {
         event.preventDefault();
@@ -1915,6 +1918,14 @@
         if (!stageInfoMenu.contains(event.target) && !stageInfoBtn.contains(event.target)) {
             closeStageInfoMenu();
         }
+    });
+
+    [aiModal, notesModal].forEach((modal) => {
+        modal.addEventListener('click', (event) => {
+            if (event.target === modal) {
+                modal.classList.remove('open');
+            }
+        });
     });
 
     const canvas = document.getElementById('wbCanvas');
