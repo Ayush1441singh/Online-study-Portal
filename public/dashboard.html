@@ -96,7 +96,6 @@
 
     <script>
         const FACE_MODEL_URL = '/models';
-        const DETECTOR_OPTIONS = new faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: 0.35 });
 
         const state = {
             currentUser: null,
@@ -155,12 +154,13 @@
 
         async function detectFaceDescriptor(video, statusNode) {
             await ensureVideoReady(video);
+            const detectorOptions = new faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: 0.35 });
 
             for (let attempt = 0; attempt < 5; attempt += 1) {
                 const frame = captureFrame(video);
                 const detection = await withTimeout(
                     faceapi
-                        .detectSingleFace(frame, DETECTOR_OPTIONS)
+                        .detectSingleFace(frame, detectorOptions)
                         .withFaceLandmarks()
                         .withFaceDescriptor(),
                     12000,
