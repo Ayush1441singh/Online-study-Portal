@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OTP Verification - StudyPortal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background: #020617; color: white; font-family: 'Inter', sans-serif; }
+        .panel { background: rgba(15, 23, 42, 0.9); backdrop-filter: blur(16px); border: 1px solid rgba(99, 102, 241, 0.25); }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-6">
+    <div class="panel w-full max-w-xl rounded-[2.5rem] p-8 md:p-12 shadow-2xl">
+        <p class="text-center text-[10px] uppercase tracking-[0.35em] text-indigo-400 font-black mb-3">Step 2 of 2</p>
+        <h1 class="text-center text-3xl md:text-4xl font-black italic uppercase mb-4">Verify OTP</h1>
+        <p id="otpHint" class="text-center text-slate-400 max-w-xl mx-auto mb-8">Enter the 6-digit code sent to your email to complete sign-in.</p>
+
+        <form id="otpForm" class="space-y-5">
+            <input id="otpInput" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="Enter 6-digit OTP" class="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-center tracking-[0.5em] text-xl outline-none focus:border-indigo-500">
+            <button id="verifyButton" type="submit" class="w-full bg-indigo-600 py-4 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl">Verify OTP</button>
+        </form>
+
+        <p id="statusText" class="text-center text-xs font-bold uppercase tracking-widest mt-6 text-slate-400">Waiting for your code.</p>
+        <div class="mt-8 grid grid-cols-1 gap-4 md:grid-cols-2">
+            <button id="resendButton" class="bg-white/5 border border-white/10 py-4 rounded-2xl font-black uppercase text-xs tracking-widest">Resend OTP</button>
+            <button id="backButton" class="bg-red-500/10 text-red-400 border border-red-500/20 py-4 rounded-2xl font-black uppercase text-xs tracking-widest">Back To Login</button>
+        </div>
+
+        <p id="otpPreview" class="hidden text-center text-xs font-bold uppercase tracking-widest mt-5 text-amber-300"></p>
+    </div>
+
+    <script>
+        const otpForm = document.getElementById('otpForm');
+        const otpInput = document.getElementById('otpInput');
+        const verifyButton = document.getElementById('verifyButton');
+        const resendButton = document.getElementById('resendButton');
+        const backButton = document.getElementById('backButton');
+        const statusText = document.getElementById('statusText');
+        const otpHint = document.getElementById('otpHint');
+        const otpPreview = document.getElementById('otpPreview');
+
+        const emailHint = sessionStorage.getItem('otp_email_hint');
+        const previewCode = sessionStorage.getItem('otp_preview');
+
+        if (emailHint) {
+            otpHint.textContent = `Enter the 6-digit code sent to ${emailHint} to complete sign-in.`;
+        }
+
+        if (previewCode) {
+            otpPreview.textContent = `Preview OTP: ${previewCode}`;
+            otpPreview.className = 'text-center text-xs font-bold uppercase tracking-widest mt-5 text-amber-300';
+        }
+
+        function showStatus(message, isError = false) {
+            statusText.textContent = message;
+            statusText.className = `text-center text-xs font-bold uppercase tracking-widest mt-6 ${isError ? 'text-red-400' : 'text-slate-400'}`;
+        }
+
+        otpForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            verifyButton.disabled = true;
+            verifyButton.textContent = 'Verifying...';
+            showStatus('Checking OTP...');
+
+            try {
+                const response = await fetch('/verify-otp', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ otp: otpInput.value.trim() })
+                });
+
+                const data = await response.json();
+                if (!response.ok || !data.success) {
+                    throw new Error(data.message || 'OTP verification failed.');
+                }
+
+                sessionStorage.removeItem('otp_preview');
+                showStatus('OTP verified. Opening dashboard...');
+                window.location.href = '/dashboard.html';
+            } catch (error) {
+                showStatus(error.message || 'OTP verification failed.', true);
+            } finally {
+                verifyButton.disabled = false;
+                verifyButton.textContent = 'Verify OTP';
+            }
+        });
+
+        resendButton.addEventListener('click', async () => {
+            resendButton.disabled = true;
+            resendButton.textContent = 'Sending...';
+            showStatus('Sending a new OTP...');
+
+            try {
+                const response = await fetch('/resend-otp', { method: 'POST' });
+                const data = await response.json();
+                if (!response.ok || !data.success) {
+                    throw new Error(data.message || 'Could not resend OTP.');
+                }
+
+                if (data.otpPreview) {
+                    sessionStorage.setItem('otp_preview', data.otpPreview);
+                    otpPreview.textContent = `Preview OTP: ${data.otpPreview}`;
+                    otpPreview.className = 'text-center text-xs font-bold uppercase tracking-widest mt-5 text-amber-300';
+                }
+
+                showStatus('A fresh OTP has been sent.');
+            } catch (error) {
+                showStatus(error.message || 'Could not resend OTP.', true);
+            } finally {
+                resendButton.disabled = false;
+                resendButton.textContent = 'Resend OTP';
+            }
+        });
+
+        backButton.addEventListener('click', async () => {
+            await fetch('/logout', { method: 'POST' });
+            sessionStorage.removeItem('otp_preview');
+            window.location.href = '/login.html';
+        });
+    </script>
+</body>
+</html>

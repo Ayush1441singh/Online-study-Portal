@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const http = require('http');
 const { Server } = require('socket.io');
 const bcrypt = require('bcrypt');
+const nodemailer = require('nodemailer');
 const path = require('path');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
@@ -16,9 +17,9 @@ const server = http.createServer(app);
 const PORT = Number(process.env.PORT) || 3000;
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 const SESSION_COOKIE = 'studyportal_session';
-const FACE_PENDING_COOKIE = 'studyportal_face_pending';
+const OTP_PENDING_COOKIE = 'studyportal_otp_pending';
 const SESSION_TTL_MS = 1000 * 60 * 60 * 12;
-const FACE_PENDING_TTL_MS = 1000 * 60 * 5;
+const OTP_PENDING_TTL_MS = 1000 * 60 * 5;
 const MAX_JSON_SIZE = '16kb';
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
     .split(',')
@@ -28,6 +29,7 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
 const dbURI = process.env.MONGODB_URI;
 const geminiApiKey = process.env.GEMINI_API_KEY;
 const sessionSecret = process.env.SESSION_SECRET || 'development-session-secret-change-me';
+const mailFrom = process.env.EMAIL_FROM || process.env.SMTP_USER || process.env.EMAIL_USER || 'no-reply@studyportal.local';
 
 if (!process.env.SESSION_SECRET) {
     console.warn('SESSION_SECRET is not set. Using an insecure development fallback.');
@@ -47,6 +49,34 @@ const rateLimitStore = new Map();
 const aiModel = geminiApiKey
     ? new GoogleGenerativeAI(geminiApiKey).getGenerativeModel({ model: 'gemini-pro' })
     : null;
+
+function createMailTransport() {
+    if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+        return nodemailer.createTransport({
+            host: process.env.SMTP_HOST,
+            port: Number(process.env.SMTP_PORT) || 587,
+            secure: String(process.env.SMTP_SECURE || '').toLowerCase() === 'true',
+            auth: {
+                user: process.env.SMTP_USER,
+                pass: process.env.SMTP_PASS,
+            },
+        });
+    }
+
+    if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+        return nodemailer.createTransport({
+            service: process.env.EMAIL_SERVICE || 'gmail',
+            auth: {
+                user: process.env.EMAIL_USER,
+                pass: process.env.EMAIL_PASS,
+            },
+        });
+    }
+
+    return null;
+}
+
+const mailTransport = createMailTransport();
 
 function isAllowedOrigin(origin) {
     if (!origin) {
@@ -229,24 +259,24 @@ function clearSessionCookie(res) {
     );
 }
 
-function setFacePendingCookie(res, payload) {
+function setOtpPendingCookie(res, payload) {
     const token = createSessionToken(payload);
     res.setHeader(
         'Set-Cookie',
-        serializeCookie(FACE_PENDING_COOKIE, token, {
+        serializeCookie(OTP_PENDING_COOKIE, token, {
             httpOnly: true,
             sameSite: 'Strict',
             secure: IS_PRODUCTION,
             path: '/',
-            maxAge: Math.floor(FACE_PENDING_TTL_MS / 1000),
+            maxAge: Math.floor(OTP_PENDING_TTL_MS / 1000),
         })
     );
 }
 
-function clearFacePendingCookie(res) {
+function clearOtpPendingCookie(res) {
     res.setHeader(
         'Set-Cookie',
-        serializeCookie(FACE_PENDING_COOKIE, '', {
+        serializeCookie(OTP_PENDING_COOKIE, '', {
             httpOnly: true,
             sameSite: 'Strict',
             secure: IS_PRODUCTION,
@@ -332,24 +362,32 @@ function ensureText(value, { min = 1, max = 500 } = {}) {
     return trimmed;
 }
 
-function ensureDescriptor(value) {
-    if (!Array.isArray(value) || value.length !== 128) {
-        return null;
-    }
-
-    const descriptor = value.map((item) => Number(item));
-    const allValid = descriptor.every((item) => Number.isFinite(item) && Math.abs(item) <= 10);
-    return allValid ? descriptor : null;
+function generateOtp() {
+    return String(Math.floor(100000 + Math.random() * 900000));
 }
 
-function descriptorDistance(first, second) {
-    let total = 0;
-    for (let index = 0; index < first.length; index += 1) {
-        const diff = first[index] - second[index];
-        total += diff * diff;
+async function sendLoginOtp(user) {
+    const otp = generateOtp();
+    const otpExpiry = new Date(Date.now() + OTP_PENDING_TTL_MS);
+
+    user.otp = otp;
+    user.otpExpiry = otpExpiry;
+    await user.save();
+
+    if (!mailTransport) {
+        console.warn(`OTP delivery is not configured. OTP for ${user.email}: ${otp}`);
+        return otp;
     }
 
-    return Math.sqrt(total);
+    await mailTransport.sendMail({
+        from: mailFrom,
+        to: user.email,
+        subject: 'StudyPortal login OTP',
+        text: `Your StudyPortal verification code is ${otp}. It expires in 5 minutes.`,
+        html: `<p>Your StudyPortal verification code is <strong>${otp}</strong>.</p><p>It expires in 5 minutes.</p>`,
+    });
+
+    return otp;
 }
 
 app.set('trust proxy', 1);
@@ -416,15 +454,19 @@ app.get('/dashboard.html', requirePageAuth, (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
 });
 
-app.get('/face-check.html', (req, res) => {
+app.get('/otp-check.html', (req, res) => {
     const cookies = parseCookies(req);
-    const pendingSession = verifySessionToken(cookies[FACE_PENDING_COOKIE]);
+    const pendingSession = verifySessionToken(cookies[OTP_PENDING_COOKIE]);
 
     if (!pendingSession) {
         return res.redirect('/login.html');
     }
 
-    res.sendFile(path.join(__dirname, 'public', 'face-check.html'));
+    res.sendFile(path.join(__dirname, 'public', 'otp-check.html'));
+});
+
+app.get('/face-check.html', (req, res) => {
+    res.redirect('/otp-check.html');
 });
 
 app.get('/studyroom.html', requirePageAuth, (req, res) => {
@@ -444,17 +486,12 @@ app.get('/me', requireAuth, (req, res) => {
     });
 });
 
-app.get('/face-status', requireAuth, async (req, res) => {
-    try {
-        const user = await User.findById(req.user.id).select('faceDescriptor');
-        res.status(200).json({
-            success: true,
-            enrolled: Boolean(user && Array.isArray(user.faceDescriptor) && user.faceDescriptor.length === 128),
-        });
-    } catch (error) {
-        console.error('Face status error:', error);
-        res.status(500).json({ success: false, enrolled: false });
-    }
+app.get('/security-status', requireAuth, async (req, res) => {
+    res.status(200).json({
+        success: true,
+        otpEnabled: true,
+        passkeyAvailable: false,
+    });
 });
 
 app.post('/register', rateLimiter({ windowMs: 15 * 60 * 1000, maxRequests: 10, keyPrefix: 'register' }), async (req, res) => {
@@ -506,39 +543,41 @@ app.post('/login', rateLimiter({ windowMs: 15 * 60 * 1000, maxRequests: 20, keyP
             return res.status(400).json({ success: false, message: 'Invalid email or password.' });
         }
 
-        if (Array.isArray(user.faceDescriptor) && user.faceDescriptor.length === 128) {
-            setFacePendingCookie(res, {
-                id: String(user._id),
-                username: user.username,
-                email: user.email,
-                stage: 'face-login',
-                exp: Date.now() + FACE_PENDING_TTL_MS,
-            });
-
-            return res.status(200).json({
-                success: true,
-                requiresFaceVerification: true,
+        if (IS_PRODUCTION && !mailTransport) {
+            return res.status(503).json({
+                success: false,
+                message: 'OTP email delivery is not configured on the server yet.',
             });
         }
 
-        setSessionCookie(res, {
+        const otp = await sendLoginOtp(user);
+
+        setOtpPendingCookie(res, {
             id: String(user._id),
             username: user.username,
             email: user.email,
+            stage: 'otp-login',
+            exp: Date.now() + OTP_PENDING_TTL_MS,
         });
 
-        res.status(200).json({
+        const response = {
             success: true,
-            username: user.username,
-            email: user.email,
-        });
+            requiresOtpVerification: true,
+            message: 'Password accepted. We sent a 6-digit code to your email.',
+        };
+
+        if (!IS_PRODUCTION && !mailTransport) {
+            response.otpPreview = otp;
+        }
+
+        res.status(200).json(response);
     } catch (err) {
         console.error('Login error:', err);
         res.status(500).json({ success: false, message: 'Authentication failure.' });
     }
 });
 
-app.post('/logout', requireAuth, (req, res) => {
+app.post('/logout', (req, res) => {
     res.setHeader('Set-Cookie', [
         serializeCookie(SESSION_COOKIE, '', {
             httpOnly: true,
@@ -547,7 +586,7 @@ app.post('/logout', requireAuth, (req, res) => {
             path: '/',
             maxAge: 0,
         }),
-        serializeCookie(FACE_PENDING_COOKIE, '', {
+        serializeCookie(OTP_PENDING_COOKIE, '', {
             httpOnly: true,
             sameSite: 'Strict',
             secure: IS_PRODUCTION,
@@ -558,31 +597,38 @@ app.post('/logout', requireAuth, (req, res) => {
     res.status(200).json({ success: true });
 });
 
-app.post('/verify-face-login', rateLimiter({ windowMs: 5 * 60 * 1000, maxRequests: 10, keyPrefix: 'verify-face' }), async (req, res) => {
+app.post('/verify-otp', rateLimiter({ windowMs: 5 * 60 * 1000, maxRequests: 12, keyPrefix: 'verify-otp' }), async (req, res) => {
     try {
         const cookies = parseCookies(req);
-        const pendingSession = verifySessionToken(cookies[FACE_PENDING_COOKIE]);
-        if (!pendingSession || pendingSession.stage !== 'face-login') {
-            return res.status(401).json({ success: false, message: 'Face verification session expired.' });
+        const pendingSession = verifySessionToken(cookies[OTP_PENDING_COOKIE]);
+        if (!pendingSession || pendingSession.stage !== 'otp-login') {
+            return res.status(401).json({ success: false, message: 'OTP session expired. Please log in again.' });
         }
 
-        const descriptor = ensureDescriptor(req.body.descriptor);
-        if (!descriptor) {
-            return res.status(400).json({ success: false, message: 'Invalid face scan data.' });
+        const otp = ensureText(req.body.otp, { min: 6, max: 6 });
+        if (!otp || !/^\d{6}$/.test(otp)) {
+            return res.status(400).json({ success: false, message: 'Please enter a valid 6-digit OTP.' });
         }
 
-        const user = await User.findById(pendingSession.id).select('username email faceDescriptor');
-        if (!user || !Array.isArray(user.faceDescriptor) || user.faceDescriptor.length !== 128) {
-            return res.status(400).json({ success: false, message: 'No enrolled face found for this account.' });
+        const user = await User.findById(pendingSession.id).select('username email otp otpExpiry');
+        if (!user || !user.otp || !user.otpExpiry) {
+            return res.status(400).json({ success: false, message: 'No OTP is pending for this account.' });
         }
 
-        const distance = descriptorDistance(user.faceDescriptor, descriptor);
-        if (distance > 0.48) {
-            return res.status(401).json({ success: false, message: 'Face verification failed. Please try again.' });
+        if (user.otpExpiry.getTime() < Date.now()) {
+            return res.status(401).json({ success: false, message: 'OTP expired. Request a new code and try again.' });
         }
+
+        if (user.otp !== otp) {
+            return res.status(400).json({ success: false, message: 'Incorrect OTP. Please try again.' });
+        }
+
+        user.otp = undefined;
+        user.otpExpiry = undefined;
+        await user.save();
 
         res.setHeader('Set-Cookie', [
-            serializeCookie(FACE_PENDING_COOKIE, '', {
+            serializeCookie(OTP_PENDING_COOKIE, '', {
                 httpOnly: true,
                 sameSite: 'Strict',
                 secure: IS_PRODUCTION,
@@ -604,27 +650,42 @@ app.post('/verify-face-login', rateLimiter({ windowMs: 5 * 60 * 1000, maxRequest
 
         res.status(200).json({ success: true });
     } catch (error) {
-        console.error('Face verification error:', error);
-        res.status(500).json({ success: false, message: 'Face verification failed.' });
+        console.error('OTP verification error:', error);
+        res.status(500).json({ success: false, message: 'OTP verification failed.' });
     }
 });
 
-app.post('/face-enroll', requireAuth, rateLimiter({ windowMs: 10 * 60 * 1000, maxRequests: 8, keyPrefix: 'face-enroll' }), async (req, res) => {
+app.post('/resend-otp', rateLimiter({ windowMs: 5 * 60 * 1000, maxRequests: 5, keyPrefix: 'resend-otp' }), async (req, res) => {
     try {
-        const descriptor = ensureDescriptor(req.body.descriptor);
-        if (!descriptor) {
-            return res.status(400).json({ success: false, message: 'Invalid face descriptor.' });
+        const cookies = parseCookies(req);
+        const pendingSession = verifySessionToken(cookies[OTP_PENDING_COOKIE]);
+        if (!pendingSession || pendingSession.stage !== 'otp-login') {
+            return res.status(401).json({ success: false, message: 'OTP session expired. Please log in again.' });
         }
 
-        await User.findByIdAndUpdate(req.user.id, {
-            faceDescriptor: descriptor,
-            faceDescriptorUpdatedAt: new Date(),
-        });
+        const user = await User.findById(pendingSession.id).select('username email otp otpExpiry');
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'Account not found.' });
+        }
 
-        res.status(200).json({ success: true, message: 'Face recognition has been enabled.' });
+        if (IS_PRODUCTION && !mailTransport) {
+            return res.status(503).json({
+                success: false,
+                message: 'OTP email delivery is not configured on the server yet.',
+            });
+        }
+
+        const otp = await sendLoginOtp(user);
+        const response = { success: true, message: 'A new OTP has been sent to your email.' };
+
+        if (!IS_PRODUCTION && !mailTransport) {
+            response.otpPreview = otp;
+        }
+
+        res.status(200).json(response);
     } catch (error) {
-        console.error('Face enrollment error:', error);
-        res.status(500).json({ success: false, message: 'Unable to save face data.' });
+        console.error('Resend OTP error:', error);
+        res.status(500).json({ success: false, message: 'Could not resend OTP.' });
     }
 });
 

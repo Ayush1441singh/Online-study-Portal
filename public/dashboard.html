@@ -5,18 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard - StudyPortal</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         body { background: #0f172a; color: white; font-family: 'Inter', sans-serif; }
         .glass-card { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(15px); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 2.5rem; transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
         .glass-card:hover { transform: translateY(-8px); border-color: #6366f1; }
-        #editModal, #faceModal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 100; align-items: center; justify-content: center; }
-        #faceVideo { width: 100%; border-radius: 1.5rem; background: #020617; aspect-ratio: 4 / 3; object-fit: cover; }
+        #editModal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 100; align-items: center; justify-content: center; }
     </style>
 </head>
 <body class="p-8">
-
     <header class="max-w-6xl mx-auto flex justify-between items-center mb-16">
         <h1 class="text-3xl font-black italic tracking-tighter uppercase text-indigo-500">STUDYPORTAL</h1>
         <button id="logoutButton" class="bg-red-500/10 text-red-500 px-8 py-2 rounded-full font-bold border border-red-500/20 hover:bg-red-500 hover:text-white transition">Sign Out</button>
@@ -41,11 +38,14 @@
                 </div>
             </div>
 
-            <div class="glass-card p-6 min-w-[280px]">
-                <p class="text-[10px] text-slate-400 font-black uppercase tracking-[0.3em] mb-3">Face Security</p>
-                <h3 id="faceStatusTitle" class="text-2xl font-black italic mb-2">Checking status...</h3>
-                <p id="faceStatusText" class="text-slate-400 text-sm mb-5">Loading your security settings.</p>
-                <button id="faceSetupButton" class="w-full bg-indigo-600 py-3 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl">Set Up Face Recognition</button>
+            <div class="glass-card p-6 min-w-[300px]">
+                <p class="text-[10px] text-slate-400 font-black uppercase tracking-[0.3em] mb-3">Security</p>
+                <h3 class="text-2xl font-black italic mb-2">Email OTP Enabled</h3>
+                <p class="text-slate-400 text-sm mb-4">Every login now requires your password and a 6-digit code sent to your email.</p>
+                <div class="rounded-2xl bg-white/5 border border-white/10 p-4">
+                    <p class="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mb-2">Passkey</p>
+                    <p class="text-sm text-slate-300">Optional passkey support is planned next, so users can sign in with device PIN, phone approval, or biometrics when available.</p>
+                </div>
             </div>
         </div>
 
@@ -81,103 +81,7 @@
         </div>
     </div>
 
-    <div id="faceModal">
-        <div class="bg-slate-900 p-8 rounded-[2.5rem] border border-indigo-500 w-full max-w-xl shadow-2xl">
-            <h3 class="text-xl font-black mb-3 italic uppercase text-center tracking-widest">Face Recognition Setup</h3>
-            <p class="text-center text-slate-400 text-sm mb-6">Align your face in the frame and capture one clear scan for future sign-ins.</p>
-            <video id="faceVideo" autoplay muted playsinline></video>
-            <p id="faceEnrollStatus" class="text-center text-xs font-bold uppercase tracking-widest mt-5 text-slate-400">Camera inactive.</p>
-            <div class="flex space-x-4 mt-8">
-                <button id="closeFaceModalButton" class="flex-1 text-xs font-bold opacity-50 uppercase tracking-widest">Cancel</button>
-                <button id="captureFaceButton" class="flex-1 bg-indigo-600 py-4 rounded-2xl font-bold text-xs uppercase tracking-widest shadow-xl hover:bg-indigo-500 transition">Capture Face</button>
-            </div>
-        </div>
-    </div>
-
     <script>
-        const FACE_MODEL_URL = '/models';
-
-        const state = {
-            currentUser: null,
-            faceEnrolled: false,
-            modelsLoaded: false,
-            faceStream: null
-        };
-
-        function wait(ms) {
-            return new Promise((resolve) => setTimeout(resolve, ms));
-        }
-
-        function withTimeout(promise, ms, message) {
-            return Promise.race([
-                promise,
-                new Promise((_, reject) => setTimeout(() => reject(new Error(message)), ms)),
-            ]);
-        }
-
-        async function ensureVideoReady(video) {
-            if (video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0) {
-                return;
-            }
-
-            await new Promise((resolve, reject) => {
-                const timeoutId = setTimeout(() => reject(new Error('Camera is not ready yet. Please retry.')), 8000);
-
-                function cleanup() {
-                    clearTimeout(timeoutId);
-                    video.removeEventListener('loadedmetadata', onReady);
-                    video.removeEventListener('canplay', onReady);
-                }
-
-                function onReady() {
-                    cleanup();
-                    resolve();
-                }
-
-                video.addEventListener('loadedmetadata', onReady, { once: true });
-                video.addEventListener('canplay', onReady, { once: true });
-            });
-        }
-
-        function captureFrame(video) {
-            const canvas = document.createElement('canvas');
-            const sourceWidth = video.videoWidth || 640;
-            const sourceHeight = video.videoHeight || 480;
-            const maxWidth = 480;
-            const scale = Math.min(1, maxWidth / sourceWidth);
-            canvas.width = Math.max(160, Math.round(sourceWidth * scale));
-            canvas.height = Math.max(120, Math.round(sourceHeight * scale));
-            const context = canvas.getContext('2d', { willReadFrequently: true });
-            context.drawImage(video, 0, 0, canvas.width, canvas.height);
-            return canvas;
-        }
-
-        async function detectFaceDescriptor(video, statusNode) {
-            await ensureVideoReady(video);
-            const detectorOptions = new faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: 0.35 });
-
-            for (let attempt = 0; attempt < 5; attempt += 1) {
-                const frame = captureFrame(video);
-                const detection = await withTimeout(
-                    faceapi
-                        .detectSingleFace(frame, detectorOptions)
-                        .withFaceLandmarks()
-                        .withFaceDescriptor(),
-                    12000,
-                    'Face scan timed out. Move closer to the camera and improve lighting, then retry.'
-                );
-
-                if (detection) {
-                    return detection;
-                }
-
-                statusNode.textContent = 'Looking for a clear face... keep still and face the camera.';
-                await wait(500);
-            }
-
-            return null;
-        }
-
         function openProfileModal() {
             document.getElementById('editModal').style.display = 'flex';
         }
@@ -203,15 +107,6 @@
             closeProfileModal();
         }
 
-        function setFaceStatus(enrolled) {
-            state.faceEnrolled = enrolled;
-            document.getElementById('faceStatusTitle').textContent = enrolled ? 'Face lock enabled' : 'Face lock not enabled';
-            document.getElementById('faceStatusText').textContent = enrolled
-                ? 'Your next login will require both password and webcam face verification.'
-                : 'Enable webcam-based face verification after password login.';
-            document.getElementById('faceSetupButton').textContent = enrolled ? 'Update Face Recognition' : 'Set Up Face Recognition';
-        }
-
         async function loadCurrentUser() {
             const response = await fetch('/me');
             if (!response.ok) {
@@ -220,8 +115,6 @@
             }
 
             const data = await response.json();
-            state.currentUser = data.user;
-
             document.getElementById('welcomeText').textContent = `Hello, ${data.user.username}!`;
             document.getElementById('emailDisp').textContent = data.user.email;
 
@@ -232,104 +125,13 @@
             document.getElementById('bioText').textContent = `"${userBio}"`;
         }
 
-        async function loadFaceStatus() {
-            const response = await fetch('/face-status');
-            const data = await response.json();
-            setFaceStatus(Boolean(data.enrolled));
-        }
-
-        async function ensureFaceModels() {
-            if (state.modelsLoaded) {
-                return;
-            }
-
-            document.getElementById('faceEnrollStatus').textContent = 'Loading face detection models...';
-            await Promise.all([
-                faceapi.nets.tinyFaceDetector.loadFromUri(FACE_MODEL_URL),
-                faceapi.nets.faceLandmark68Net.loadFromUri(FACE_MODEL_URL),
-                faceapi.nets.faceRecognitionNet.loadFromUri(FACE_MODEL_URL)
-            ]);
-            state.modelsLoaded = true;
-        }
-
-        async function openFaceModal() {
-            const modal = document.getElementById('faceModal');
-            modal.style.display = 'flex';
-
-            try {
-                await ensureFaceModels();
-                state.faceStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-                const faceVideo = document.getElementById('faceVideo');
-                faceVideo.srcObject = state.faceStream;
-                await faceVideo.play();
-                await ensureVideoReady(faceVideo);
-                document.getElementById('faceEnrollStatus').textContent = 'Camera ready. Keep your face centered and well-lit.';
-            } catch (error) {
-                document.getElementById('faceEnrollStatus').textContent = 'Unable to start the camera or load models.';
-            }
-        }
-
-        function closeFaceModal() {
-            if (state.faceStream) {
-                state.faceStream.getTracks().forEach((track) => track.stop());
-                state.faceStream = null;
-            }
-
-            document.getElementById('faceVideo').srcObject = null;
-            document.getElementById('faceModal').style.display = 'none';
-            document.getElementById('faceEnrollStatus').textContent = 'Camera inactive.';
-        }
-
-        async function captureFace() {
-            const status = document.getElementById('faceEnrollStatus');
-            const video = document.getElementById('faceVideo');
-            const captureButton = document.getElementById('captureFaceButton');
-            status.textContent = 'Scanning face...';
-            captureButton.disabled = true;
-            captureButton.textContent = 'Scanning...';
-
-            try {
-                const detection = await detectFaceDescriptor(video, status);
-
-                if (!detection) {
-                    throw new Error('No face detected. Please face the camera directly and try again.');
-                }
-
-                const response = await fetch('/face-enroll', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ descriptor: Array.from(detection.descriptor) })
-                });
-
-                const data = await response.json();
-                if (!response.ok || !data.success) {
-                    throw new Error(data.message || 'Enrollment failed.');
-                }
-
-                status.textContent = 'Face recognition enabled successfully.';
-                setFaceStatus(true);
-                setTimeout(closeFaceModal, 900);
-            } catch (error) {
-                status.textContent = error.message || 'Enrollment failed.';
-            } finally {
-                captureButton.disabled = false;
-                captureButton.textContent = 'Capture Face';
-            }
-        }
-
         async function logoutUser() {
             await fetch('/logout', { method: 'POST' });
-            localStorage.removeItem('userBio');
-            localStorage.removeItem('userPic');
             window.location.href = '/login.html';
         }
 
-        document.getElementById('faceSetupButton').addEventListener('click', openFaceModal);
-        document.getElementById('closeFaceModalButton').addEventListener('click', closeFaceModal);
-        document.getElementById('captureFaceButton').addEventListener('click', captureFace);
         document.getElementById('logoutButton').addEventListener('click', logoutUser);
-
-        Promise.all([loadCurrentUser(), loadFaceStatus()]);
+        loadCurrentUser();
     </script>
 </body>
 </html>

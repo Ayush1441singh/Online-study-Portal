@@ -10,14 +10,14 @@
         .glass { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); }
     </style>
 </head>
-<body class="h-screen flex items-center justify-center p-6">
+<body class="min-h-screen flex items-center justify-center p-6">
     <div class="glass w-full max-w-md p-10 rounded-[2.5rem] shadow-2xl">
         <h1 class="text-3xl font-black italic text-center text-indigo-500 mb-4 uppercase">StudyPortal</h1>
-        <p class="text-center text-xs uppercase tracking-[0.25em] text-slate-500 font-bold mb-10">Password + Face Verification</p>
+        <p class="text-center text-xs uppercase tracking-[0.25em] text-slate-500 font-bold mb-10">Password + Email OTP</p>
         <form id="loginForm" class="space-y-6">
             <input id="email" type="email" required placeholder="Email Address" class="w-full bg-white/5 border border-white/10 p-4 rounded-2xl outline-none focus:border-indigo-500">
             <input id="password" type="password" required placeholder="Password" class="w-full bg-white/5 border border-white/10 p-4 rounded-2xl outline-none focus:border-indigo-500">
-            <button id="loginButton" type="submit" class="w-full bg-indigo-600 py-4 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl">Sign In</button>
+            <button id="loginButton" type="submit" class="w-full bg-indigo-600 py-4 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl">Send OTP</button>
         </form>
         <p id="statusMessage" class="hidden mt-5 text-center text-xs font-bold uppercase tracking-widest"></p>
         <p class="text-center mt-8 text-xs text-slate-500 font-bold uppercase tracking-widest">
@@ -37,7 +37,7 @@
         form.addEventListener('submit', async (event) => {
             event.preventDefault();
             button.disabled = true;
-            button.textContent = 'Signing In...';
+            button.textContent = 'Sending OTP...';
             showStatus('Checking credentials...');
 
             try {
@@ -55,19 +55,20 @@
                     throw new Error(data.message || 'Login failed.');
                 }
 
-                if (data.requiresFaceVerification) {
-                    showStatus('Password accepted. Redirecting to face verification...');
-                    window.location.href = '/face-check.html';
-                    return;
+                sessionStorage.setItem('otp_email_hint', document.getElementById('email').value);
+                if (data.otpPreview) {
+                    sessionStorage.setItem('otp_preview', data.otpPreview);
+                } else {
+                    sessionStorage.removeItem('otp_preview');
                 }
 
-                showStatus('Login successful. Opening dashboard...');
-                window.location.href = '/dashboard.html';
+                showStatus('OTP sent. Redirecting to verification...');
+                window.location.href = '/otp-check.html';
             } catch (error) {
                 showStatus(error.message || 'Authentication failed.', true);
             } finally {
                 button.disabled = false;
-                button.textContent = 'Sign In';
+                button.textContent = 'Send OTP';
             }
         });
     </script>
