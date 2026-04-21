@@ -38,7 +38,7 @@
 
         .shell {
             display: grid;
-            grid-template-columns: 190px minmax(0, 1fr) 500px;
+            grid-template-columns: 170px minmax(0, 1fr) 500px;
             grid-template-rows: auto 1fr;
             gap: 16px;
             height: 100vh;
@@ -194,7 +194,7 @@
 
         .summary-title {
             margin-top: 10px;
-            font-size: 20px;
+            font-size: 16px;
             line-height: 1.15;
             font-weight: 700;
         }
@@ -202,8 +202,8 @@
         .summary-copy {
             margin-top: 10px;
             color: var(--muted);
-            font-size: 13px;
-            line-height: 1.5;
+            font-size: 12px;
+            line-height: 1.45;
             font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
         }
 
@@ -365,7 +365,7 @@
 
         .screen-wrap {
             position: relative;
-            min-height: 360px;
+            min-height: 280px;
             border-radius: 22px;
             overflow: hidden;
             background:
@@ -406,19 +406,62 @@
             font-size: 24px;
         }
 
+        .participant-section {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            min-height: 0;
+        }
+
+        .participant-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .participant-count {
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: rgba(41, 93, 255, 0.08);
+            color: #1845c8;
+            font-size: 10px;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            font-weight: 800;
+        }
+
         .participant-strip {
             display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 10px;
+            grid-auto-flow: column;
+            grid-auto-columns: minmax(210px, 240px);
+            gap: 12px;
+            overflow-x: auto;
+            overflow-y: hidden;
+            padding: 4px 2px 10px;
+            scroll-snap-type: x proximity;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(97, 117, 143, 0.32) transparent;
+        }
+
+        .participant-strip::-webkit-scrollbar {
+            height: 8px;
+        }
+
+        .participant-strip::-webkit-scrollbar-thumb {
+            background: rgba(97, 117, 143, 0.28);
+            border-radius: 999px;
         }
 
         .tile {
             position: relative;
-            min-height: 148px;
+            min-height: 156px;
             border-radius: 18px;
             overflow: hidden;
             background: linear-gradient(180deg, #edf3fa 0%, #e5edf7 100%);
             border: 1px solid rgba(20, 36, 59, 0.08);
+            scroll-snap-align: start;
         }
 
         .tile video {
@@ -427,6 +470,11 @@
             object-fit: cover;
             display: block;
             background: #dfe7f4;
+        }
+
+        .tile.local {
+            border-color: rgba(41, 93, 255, 0.16);
+            box-shadow: 0 12px 26px rgba(41, 93, 255, 0.1);
         }
 
         .tile-empty {
@@ -859,8 +907,11 @@
                     </div>
                 </div>
 
-                <div>
-                    <div class="eyebrow mb-3">Participants On Video</div>
+                <div class="participant-section">
+                    <div class="participant-head">
+                        <div class="eyebrow">Participants On Video</div>
+                        <div id="participantCount" class="participant-count">0 Live</div>
+                    </div>
                     <div id="videoGrid" class="participant-strip"></div>
                 </div>
             </section>
@@ -943,6 +994,7 @@
     const roomMetric = document.getElementById('roomMetric');
     const connectionBadge = document.getElementById('connectionBadge');
     const participantList = document.getElementById('participantList');
+    const participantCount = document.getElementById('participantCount');
     const videoGrid = document.getElementById('videoGrid');
     const chatBox = document.getElementById('chatBox');
     const screenVideo = document.getElementById('screen-video');
@@ -1020,9 +1072,10 @@
     function renderVideoTiles() {
         const tiles = [];
         const localFlags = getStreamFlags(state.localStream);
+        let liveCount = 0;
 
         const localTile = document.createElement('div');
-        localTile.className = 'tile';
+        localTile.className = 'tile local';
         localTile.innerHTML = `
             <div class="tile-empty">
                 <i class="fas fa-user-circle text-2xl text-slate-400"></i>
@@ -1039,6 +1092,7 @@
         `;
 
         if (state.localStream && localFlags.hasVideo) {
+            liveCount += 1;
             const localVideo = document.createElement('video');
             localVideo.autoplay = true;
             localVideo.playsInline = true;
@@ -1060,6 +1114,7 @@
             const hasAudio = participant ? participant.hasAudio : entry.hasAudio;
 
             if (hasVideo) {
+                liveCount += 1;
                 const video = document.createElement('video');
                 video.autoplay = true;
                 video.playsInline = true;
@@ -1092,6 +1147,7 @@
 
         videoGrid.innerHTML = '';
         tiles.forEach((tile) => videoGrid.appendChild(tile));
+        participantCount.textContent = `${liveCount} Live`;
     }
 
     function refreshRoomUi() {
