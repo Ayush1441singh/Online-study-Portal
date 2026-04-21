@@ -38,7 +38,7 @@
 
         .shell {
             display: grid;
-            grid-template-columns: 220px minmax(0, 0.95fr) 420px;
+            grid-template-columns: 190px minmax(0, 1fr) 500px;
             grid-template-rows: auto 1fr;
             gap: 16px;
             height: 100vh;
@@ -302,12 +302,6 @@
             color: var(--muted);
         }
 
-        .metrics {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 10px;
-        }
-
         .metric {
             padding: 14px;
             border-radius: 18px;
@@ -347,6 +341,13 @@
             align-items: start;
             justify-content: space-between;
             gap: 12px;
+        }
+
+        .stage-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            position: relative;
         }
 
         .stage-title {
@@ -628,6 +629,16 @@
             display: inline-flex;
         }
 
+        .info-popover {
+            width: 320px;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+        }
+
         .toast {
             position: fixed;
             left: 50%;
@@ -705,6 +716,7 @@
 
             .topbar { grid-column: auto; }
             .participant-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .info-popover { width: min(320px, calc(100vw - 48px)); }
         }
 
         @media (max-width: 760px) {
@@ -723,6 +735,9 @@
                 left: 0;
                 right: auto;
                 width: min(220px, calc(100vw - 48px));
+            }
+            .info-popover {
+                width: min(320px, calc(100vw - 48px));
             }
         }
     </style>
@@ -800,25 +815,6 @@
         </aside>
 
         <main class="panel stage">
-            <section class="metrics">
-                <div class="metric">
-                    <div class="metric-label">Online</div>
-                    <div id="onlineMetric" class="metric-value">0</div>
-                </div>
-                <div class="metric">
-                    <div class="metric-label">Live Cameras</div>
-                    <div id="cameraMetric" class="metric-value">0</div>
-                </div>
-                <div class="metric">
-                    <div class="metric-label">Screen Share</div>
-                    <div id="shareMetric" class="metric-value">Off</div>
-                </div>
-                <div class="metric">
-                    <div class="metric-label">Room</div>
-                    <div id="roomMetric" class="metric-value">--</div>
-                </div>
-            </section>
-
             <section class="content-stage">
                 <div class="stage-header">
                     <div>
@@ -826,7 +822,32 @@
                         <div class="stage-title">Lecture Screen</div>
                         <div id="screenStatus" class="stage-copy">No one is sharing right now. Use screen share when you want everyone to focus on notes, slides, or code.</div>
                     </div>
-                    <button id="fullscreenBtn" class="btn">Fullscreen</button>
+                    <div class="stage-actions">
+                        <button id="fullscreenBtn" class="btn">Fullscreen</button>
+                        <div class="menu-wrap">
+                            <button id="stageInfoBtn" class="btn menu-btn" type="button" aria-expanded="false" aria-controls="stageInfoMenu"><i class="fas fa-ellipsis-vertical"></i></button>
+                            <div id="stageInfoMenu" class="menu-popover info-popover">
+                                <div class="info-grid">
+                                    <div class="metric">
+                                        <div class="metric-label">Online</div>
+                                        <div id="onlineMetric" class="metric-value">0</div>
+                                    </div>
+                                    <div class="metric">
+                                        <div class="metric-label">Live Cameras</div>
+                                        <div id="cameraMetric" class="metric-value">0</div>
+                                    </div>
+                                    <div class="metric">
+                                        <div class="metric-label">Screen Share</div>
+                                        <div id="shareMetric" class="metric-value">Off</div>
+                                    </div>
+                                    <div class="metric">
+                                        <div class="metric-label">Room</div>
+                                        <div id="roomMetric" class="metric-value">--</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="screen-wrap">
@@ -890,7 +911,19 @@
     <script>
     const socket = io();
     const currentRoom = new URLSearchParams(window.location.search).get('room') || 'Room';
-    const myPeer = new Peer(undefined, { host: '0.peerjs.com', port: 443, secure: true });
+    const myPeer = new Peer(undefined, {
+        host: '0.peerjs.com',
+        port: 443,
+        secure: true,
+        config: {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' },
+                { urls: 'stun:stun2.l.google.com:19302' },
+                { urls: 'stun:global.stun.twilio.com:3478?transport=udp' },
+            ],
+        },
+    });
 
     const state = {
         currentUser: null,
@@ -921,6 +954,8 @@
     const aiInput = document.getElementById('aiInput');
     const moreBtn = document.getElementById('moreBtn');
     const moreMenu = document.getElementById('moreMenu');
+    const stageInfoBtn = document.getElementById('stageInfoBtn');
+    const stageInfoMenu = document.getElementById('stageInfoMenu');
 
     roomTitle.textContent = currentRoom;
     roomMetric.textContent = currentRoom.slice(0, 3).toUpperCase();
@@ -1009,6 +1044,7 @@
             localVideo.playsInline = true;
             localVideo.muted = true;
             localVideo.srcObject = state.localStream;
+            localVideo.onloadedmetadata = () => localVideo.play().catch(() => {});
             localTile.prepend(localVideo);
             localTile.querySelector('.tile-empty').remove();
         }
@@ -1028,6 +1064,7 @@
                 video.autoplay = true;
                 video.playsInline = true;
                 video.srcObject = entry.stream;
+                video.onloadedmetadata = () => video.play().catch(() => {});
                 tile.appendChild(video);
             } else {
                 const empty = document.createElement('div');
@@ -1090,6 +1127,11 @@
     function closeMenu() {
         moreMenu.classList.remove('open');
         moreBtn.setAttribute('aria-expanded', 'false');
+    }
+
+    function closeStageInfoMenu() {
+        stageInfoMenu.classList.remove('open');
+        stageInfoBtn.setAttribute('aria-expanded', 'false');
     }
 
     function closeCallsByType(type) {
@@ -1208,7 +1250,7 @@
     }
 
     function connectToParticipant(participant) {
-        if (!state.localStream || !participant.peerId || participant.peerId === state.myPeerId) {
+        if (!participant.peerId || participant.peerId === state.myPeerId) {
             return;
         }
 
@@ -1217,7 +1259,8 @@
             return;
         }
 
-        const call = myPeer.call(participant.peerId, state.localStream, { metadata: { type: 'media' } });
+        const outboundStream = state.localStream || new MediaStream();
+        const call = myPeer.call(participant.peerId, outboundStream, { metadata: { type: 'media' } });
         attachCallHandlers(call, 'media', participant.peerId);
     }
 
@@ -1398,6 +1441,12 @@
         broadcastPeerReadiness();
     });
 
+    myPeer.on('error', () => {
+        connectionBadge.textContent = 'Peer Issue';
+        connectionBadge.className = 'status-badge status-idle';
+        showToast('Live video connection had trouble. Retrying room sync may help.');
+    });
+
     myPeer.on('call', async (call) => {
         const callType = call.metadata && call.metadata.type === 'screen' ? 'screen' : 'media';
 
@@ -1486,11 +1535,22 @@
         const willOpen = !moreMenu.classList.contains('open');
         moreMenu.classList.toggle('open', willOpen);
         moreBtn.setAttribute('aria-expanded', String(willOpen));
+        closeStageInfoMenu();
+    });
+
+    stageInfoBtn.addEventListener('click', () => {
+        const willOpen = !stageInfoMenu.classList.contains('open');
+        stageInfoMenu.classList.toggle('open', willOpen);
+        stageInfoBtn.setAttribute('aria-expanded', String(willOpen));
+        closeMenu();
     });
 
     document.addEventListener('click', (event) => {
         if (!moreMenu.contains(event.target) && !moreBtn.contains(event.target)) {
             closeMenu();
+        }
+        if (!stageInfoMenu.contains(event.target) && !stageInfoBtn.contains(event.target)) {
+            closeStageInfoMenu();
         }
     });
 
