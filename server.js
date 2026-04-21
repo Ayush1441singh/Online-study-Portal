@@ -461,7 +461,7 @@ app.post('/register', rateLimiter({ windowMs: 15 * 60 * 1000, maxRequests: 10, k
     try {
         const username = ensureText(req.body.username, { min: 2, max: 60 });
         const email = ensureText(req.body.email, { min: 5, max: 120 });
-        const password = ensureText(req.body.password, { min: 8, max: 128 });
+        const password = ensureText(req.body.password, { min: 1, max: 128 });
 
         if (!username || !email || !password || !validateEmail(email)) {
             return res.status(400).json({
