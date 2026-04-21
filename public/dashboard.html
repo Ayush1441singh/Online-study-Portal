@@ -108,6 +108,13 @@
             return new Promise((resolve) => setTimeout(resolve, ms));
         }
 
+        function withTimeout(promise, ms, message) {
+            return Promise.race([
+                promise,
+                new Promise((_, reject) => setTimeout(() => reject(new Error(message)), ms)),
+            ]);
+        }
+
         async function ensureVideoReady(video) {
             if (video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0) {
                 return;
@@ -132,14 +139,28 @@
             });
         }
 
+        function captureFrame(video) {
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth || 640;
+            canvas.height = video.videoHeight || 480;
+            const context = canvas.getContext('2d', { willReadFrequently: true });
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            return canvas;
+        }
+
         async function detectFaceDescriptor(video, statusNode) {
             await ensureVideoReady(video);
 
             for (let attempt = 0; attempt < 5; attempt += 1) {
-                const detection = await faceapi
-                    .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 }))
-                    .withFaceLandmarks()
-                    .withFaceDescriptor();
+                const frame = captureFrame(video);
+                const detection = await withTimeout(
+                    faceapi
+                        .detectSingleFace(frame, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 }))
+                        .withFaceLandmarks()
+                        .withFaceDescriptor(),
+                    7000,
+                    'Face scan timed out. Please retry with better lighting.'
+                );
 
                 if (detection) {
                     return detection;
