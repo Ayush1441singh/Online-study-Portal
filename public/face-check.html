@@ -27,6 +27,7 @@
 
     <script>
         const FACE_MODEL_URL = 'https://justadudewhohacks.github.io/face-api.js/models';
+        const DETECTOR_OPTIONS = new faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: 0.35 });
         const faceVideo = document.getElementById('faceVideo');
         const statusText = document.getElementById('statusText');
         const verifyButton = document.getElementById('verifyButton');
@@ -69,8 +70,12 @@
 
         function captureFrame(video) {
             const canvas = document.createElement('canvas');
-            canvas.width = video.videoWidth || 640;
-            canvas.height = video.videoHeight || 480;
+            const sourceWidth = video.videoWidth || 640;
+            const sourceHeight = video.videoHeight || 480;
+            const maxWidth = 480;
+            const scale = Math.min(1, maxWidth / sourceWidth);
+            canvas.width = Math.max(160, Math.round(sourceWidth * scale));
+            canvas.height = Math.max(120, Math.round(sourceHeight * scale));
             const context = canvas.getContext('2d', { willReadFrequently: true });
             context.drawImage(video, 0, 0, canvas.width, canvas.height);
             return canvas;
@@ -83,11 +88,11 @@
                 const frame = captureFrame(video);
                 const detection = await withTimeout(
                     faceapi
-                        .detectSingleFace(frame, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 }))
+                        .detectSingleFace(frame, DETECTOR_OPTIONS)
                         .withFaceLandmarks()
                         .withFaceDescriptor(),
-                    7000,
-                    'Face scan timed out. Please retry with better lighting.'
+                    12000,
+                    'Face scan timed out. Move closer to the camera and improve lighting, then retry.'
                 );
 
                 if (detection) {
