@@ -45,6 +45,7 @@ if (!geminiApiKey) {
 
 const activeRooms = {};
 const rateLimitStore = new Map();
+const passkeyChallengeStore = new Map();
 
 const aiModel = geminiApiKey
     ? new GoogleGenerativeAI(geminiApiKey).getGenerativeModel({ model: 'gemini-pro' })
@@ -366,6 +367,83 @@ function generateOtp() {
     return String(Math.floor(100000 + Math.random() * 900000));
 }
 
+function toBase64Url(value) {
+    return Buffer.from(value).toString('base64url');
+}
+
+function fromBase64Url(value) {
+    return Buffer.from(value, 'base64url');
+}
+
+function createPasskeyChallenge() {
+    return toBase64Url(crypto.randomBytes(32));
+}
+
+function sha256(value) {
+    return crypto.createHash('sha256').update(value).digest();
+}
+
+function getExpectedOriginSet(req) {
+    const protocol = req.protocol || (IS_PRODUCTION ? 'https' : 'http');
+    const hosts = [req.get('host')].filter(Boolean);
+    const origins = hosts.map((host) => `${protocol}://${host}`);
+
+    allowedOrigins.forEach((origin) => origins.push(origin));
+    return new Set(origins);
+}
+
+function isValidPasskeyOrigin(req, origin) {
+    if (!origin) {
+        return false;
+    }
+
+    return getExpectedOriginSet(req).has(origin);
+}
+
+function getRpId(req) {
+    return process.env.WEBAUTHN_RP_ID || req.hostname;
+}
+
+function storePasskeyChallenge(key, payload) {
+    passkeyChallengeStore.set(key, {
+        ...payload,
+        expiresAt: Date.now() + 5 * 60 * 1000,
+    });
+}
+
+function consumePasskeyChallenge(key, expectedType) {
+    const record = passkeyChallengeStore.get(key);
+    passkeyChallengeStore.delete(key);
+
+    if (!record || record.expiresAt < Date.now()) {
+        return null;
+    }
+
+    if (expectedType && record.type !== expectedType) {
+        return null;
+    }
+
+    return record;
+}
+
+function parseClientDataJSON(encoded) {
+    return JSON.parse(fromBase64Url(encoded).toString('utf8'));
+}
+
+function parseAuthenticatorData(encoded) {
+    const buffer = fromBase64Url(encoded);
+    if (buffer.length < 37) {
+        throw new Error('Authenticator data is incomplete.');
+    }
+
+    return {
+        buffer,
+        rpIdHash: buffer.subarray(0, 32),
+        flags: buffer[32],
+        signCount: buffer.readUInt32BE(33),
+    };
+}
+
 async function sendLoginOtp(user) {
     const otp = generateOtp();
     const otpExpiry = new Date(Date.now() + OTP_PENDING_TTL_MS);
@@ -487,11 +565,280 @@ app.get('/me', requireAuth, (req, res) => {
 });
 
 app.get('/security-status', requireAuth, async (req, res) => {
+    const user = await User.findById(req.user.id).select('passkeyCredentialId passkeyCreatedAt');
     res.status(200).json({
         success: true,
         otpEnabled: true,
-        passkeyAvailable: false,
+        passkeyAvailable: Boolean(user && user.passkeyCredentialId),
+        passkeyCreatedAt: user && user.passkeyCreatedAt ? user.passkeyCreatedAt.toISOString() : null,
     });
+});
+
+app.post('/passkey/register/options', requireAuth, rateLimiter({ windowMs: 5 * 60 * 1000, maxRequests: 10, keyPrefix: 'passkey-register-options' }), async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id).select('username email passkeyCredentialId passkeyTransports');
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'Account not found.' });
+        }
+
+        const challenge = createPasskeyChallenge();
+        const rpId = getRpId(req);
+        const userId = toBase64Url(Buffer.from(String(user._id)));
+
+        storePasskeyChallenge(`register:${req.user.id}`, {
+            type: 'register',
+            challenge,
+            rpId,
+        });
+
+        res.status(200).json({
+            success: true,
+            publicKey: {
+                challenge,
+                rp: {
+                    name: 'StudyPortal',
+                    id: rpId,
+                },
+                user: {
+                    id: userId,
+                    name: user.email,
+                    displayName: user.username,
+                },
+                timeout: 60000,
+                attestation: 'none',
+                authenticatorSelection: {
+                    residentKey: 'preferred',
+                    userVerification: 'preferred',
+                },
+                pubKeyCredParams: [
+                    { type: 'public-key', alg: -7 },
+                    { type: 'public-key', alg: -257 },
+                ],
+                excludeCredentials: user.passkeyCredentialId ? [{
+                    id: user.passkeyCredentialId,
+                    type: 'public-key',
+                    transports: user.passkeyTransports || ['internal', 'hybrid'],
+                }] : [],
+            },
+        });
+    } catch (error) {
+        console.error('Passkey register options error:', error);
+        res.status(500).json({ success: false, message: 'Could not prepare passkey registration.' });
+    }
+});
+
+app.post('/passkey/register/verify', requireAuth, rateLimiter({ windowMs: 5 * 60 * 1000, maxRequests: 10, keyPrefix: 'passkey-register-verify' }), async (req, res) => {
+    try {
+        const challengeRecord = consumePasskeyChallenge(`register:${req.user.id}`, 'register');
+        if (!challengeRecord) {
+            return res.status(400).json({ success: false, message: 'Passkey registration expired. Try again.' });
+        }
+
+        const credential = req.body && req.body.credential;
+        const rawId = ensureText(credential && credential.rawId, { min: 16, max: 4096 });
+        const id = ensureText(credential && credential.id, { min: 16, max: 4096 });
+        const type = ensureText(credential && credential.type, { min: 4, max: 32 });
+        const response = credential && credential.response;
+        const clientDataJSON = ensureText(response && response.clientDataJSON, { min: 16, max: 12000 });
+        const publicKey = ensureText(response && response.publicKey, { min: 16, max: 16000 });
+        const publicKeyAlgorithm = response && Number.isInteger(response.publicKeyAlgorithm) ? response.publicKeyAlgorithm : null;
+        const transports = Array.isArray(response && response.transports)
+            ? response.transports.filter((item) => typeof item === 'string').slice(0, 8)
+            : [];
+
+        if (!rawId || !id || type !== 'public-key' || !clientDataJSON || !publicKey || !publicKeyAlgorithm) {
+            return res.status(400).json({ success: false, message: 'Passkey registration payload is incomplete.' });
+        }
+
+        const clientData = parseClientDataJSON(clientDataJSON);
+        if (clientData.type !== 'webauthn.create') {
+            return res.status(400).json({ success: false, message: 'Unexpected passkey registration type.' });
+        }
+
+        if (clientData.challenge !== challengeRecord.challenge) {
+            return res.status(400).json({ success: false, message: 'Passkey challenge did not match.' });
+        }
+
+        if (!isValidPasskeyOrigin(req, clientData.origin)) {
+            return res.status(400).json({ success: false, message: 'Passkey origin was not trusted.' });
+        }
+
+        const user = await User.findById(req.user.id).select('passkeyCredentialId');
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'Account not found.' });
+        }
+
+        user.passkeyCredentialId = rawId;
+        user.passkeyPublicKey = publicKey;
+        user.passkeyCounter = 0;
+        user.passkeyTransports = transports;
+        user.passkeyLabel = ensureText(req.body && req.body.label, { min: 2, max: 80 }) || 'Primary device';
+        user.passkeyCreatedAt = new Date();
+        await user.save();
+
+        res.status(200).json({ success: true, message: 'Passkey saved for this account.' });
+    } catch (error) {
+        console.error('Passkey register verify error:', error);
+        res.status(500).json({ success: false, message: 'Could not finish passkey registration.' });
+    }
+});
+
+app.post('/passkey/auth/options', rateLimiter({ windowMs: 5 * 60 * 1000, maxRequests: 20, keyPrefix: 'passkey-auth-options' }), async (req, res) => {
+    try {
+        const email = ensureText(req.body.email, { min: 5, max: 120 });
+        if (!email || !validateEmail(email)) {
+            return res.status(400).json({ success: false, message: 'Enter the email used for your passkey.' });
+        }
+
+        const normalizedEmail = email.toLowerCase();
+        const user = await User.findOne({ email: normalizedEmail }).select('username email passkeyCredentialId passkeyTransports');
+        if (!user || !user.passkeyCredentialId) {
+            return res.status(404).json({ success: false, message: 'No passkey is saved for this account yet.' });
+        }
+
+        const challenge = createPasskeyChallenge();
+        const rpId = getRpId(req);
+        storePasskeyChallenge(`auth:${user._id}`, {
+            type: 'auth',
+            challenge,
+            rpId,
+        });
+
+        res.status(200).json({
+            success: true,
+            publicKey: {
+                challenge,
+                rpId,
+                timeout: 60000,
+                userVerification: 'preferred',
+                allowCredentials: [{
+                    id: user.passkeyCredentialId,
+                    type: 'public-key',
+                    transports: user.passkeyTransports || ['internal', 'hybrid'],
+                }],
+            },
+            username: user.username,
+        });
+    } catch (error) {
+        console.error('Passkey auth options error:', error);
+        res.status(500).json({ success: false, message: 'Could not start passkey sign-in.' });
+    }
+});
+
+app.post('/passkey/auth/verify', rateLimiter({ windowMs: 5 * 60 * 1000, maxRequests: 20, keyPrefix: 'passkey-auth-verify' }), async (req, res) => {
+    try {
+        const email = ensureText(req.body.email, { min: 5, max: 120 });
+        if (!email || !validateEmail(email)) {
+            return res.status(400).json({ success: false, message: 'Email is required for passkey sign-in.' });
+        }
+
+        const normalizedEmail = email.toLowerCase();
+        const user = await User.findOne({ email: normalizedEmail }).select(
+            'username email passkeyCredentialId passkeyPublicKey passkeyCounter'
+        );
+        if (!user || !user.passkeyCredentialId || !user.passkeyPublicKey) {
+            return res.status(404).json({ success: false, message: 'No passkey is available for this account.' });
+        }
+
+        const challengeRecord = consumePasskeyChallenge(`auth:${user._id}`, 'auth');
+        if (!challengeRecord) {
+            return res.status(400).json({ success: false, message: 'Passkey sign-in expired. Try again.' });
+        }
+
+        const credential = req.body && req.body.credential;
+        const rawId = ensureText(credential && credential.rawId, { min: 16, max: 4096 });
+        const type = ensureText(credential && credential.type, { min: 4, max: 32 });
+        const response = credential && credential.response;
+        const clientDataJSON = ensureText(response && response.clientDataJSON, { min: 16, max: 12000 });
+        const authenticatorData = ensureText(response && response.authenticatorData, { min: 16, max: 12000 });
+        const signature = ensureText(response && response.signature, { min: 16, max: 12000 });
+
+        if (!rawId || rawId !== user.passkeyCredentialId || type !== 'public-key' || !clientDataJSON || !authenticatorData || !signature) {
+            return res.status(400).json({ success: false, message: 'Passkey assertion payload is invalid.' });
+        }
+
+        const clientData = parseClientDataJSON(clientDataJSON);
+        if (clientData.type !== 'webauthn.get') {
+            return res.status(400).json({ success: false, message: 'Unexpected passkey sign-in type.' });
+        }
+
+        if (clientData.challenge !== challengeRecord.challenge) {
+            return res.status(400).json({ success: false, message: 'Passkey challenge did not match.' });
+        }
+
+        if (!isValidPasskeyOrigin(req, clientData.origin)) {
+            return res.status(400).json({ success: false, message: 'Passkey origin was not trusted.' });
+        }
+
+        const authData = parseAuthenticatorData(authenticatorData);
+        if (!authData.rpIdHash.equals(sha256(challengeRecord.rpId))) {
+            return res.status(400).json({ success: false, message: 'Passkey RP ID did not match this site.' });
+        }
+
+        if ((authData.flags & 0x01) === 0) {
+            return res.status(400).json({ success: false, message: 'Passkey user presence check failed.' });
+        }
+
+        const signedPayload = Buffer.concat([
+            authData.buffer,
+            sha256(fromBase64Url(clientDataJSON)),
+        ]);
+
+        const verified = crypto.verify(
+            'sha256',
+            signedPayload,
+            {
+                key: fromBase64Url(user.passkeyPublicKey),
+                format: 'der',
+                type: 'spki',
+            },
+            fromBase64Url(signature)
+        );
+
+        if (!verified) {
+            return res.status(401).json({ success: false, message: 'Passkey signature could not be verified.' });
+        }
+
+        if (authData.signCount > (user.passkeyCounter || 0)) {
+            user.passkeyCounter = authData.signCount;
+            await user.save();
+        }
+
+        setSessionCookie(res, {
+            id: String(user._id),
+            username: user.username,
+            email: user.email,
+        });
+
+        res.status(200).json({ success: true, message: 'Signed in with passkey.' });
+    } catch (error) {
+        console.error('Passkey auth verify error:', error);
+        res.status(500).json({ success: false, message: 'Passkey sign-in failed.' });
+    }
+});
+
+app.delete('/passkey', requireAuth, rateLimiter({ windowMs: 5 * 60 * 1000, maxRequests: 8, keyPrefix: 'passkey-delete' }), async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id).select(
+            'passkeyCredentialId passkeyPublicKey passkeyCounter passkeyTransports passkeyLabel passkeyCreatedAt'
+        );
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'Account not found.' });
+        }
+
+        user.passkeyCredentialId = undefined;
+        user.passkeyPublicKey = undefined;
+        user.passkeyCounter = 0;
+        user.passkeyTransports = undefined;
+        user.passkeyLabel = undefined;
+        user.passkeyCreatedAt = undefined;
+        await user.save();
+
+        res.status(200).json({ success: true, message: 'Passkey removed.' });
+    } catch (error) {
+        console.error('Passkey delete error:', error);
+        res.status(500).json({ success: false, message: 'Could not remove passkey.' });
+    }
 });
 
 app.post('/register', rateLimiter({ windowMs: 15 * 60 * 1000, maxRequests: 10, keyPrefix: 'register' }), async (req, res) => {
@@ -781,6 +1128,8 @@ io.on('connection', (socket) => {
                 username: socket.user.username,
                 peerId: null,
                 hasMedia: false,
+                hasVideo: false,
+                hasAudio: false,
             });
         }
 
@@ -817,6 +1166,8 @@ io.on('connection', (socket) => {
         }
 
         participant.hasMedia = Boolean(data && data.hasMedia);
+        participant.hasVideo = Boolean(data && data.hasVideo);
+        participant.hasAudio = Boolean(data && data.hasAudio);
         io.to(room).emit('room-state', activeRooms[room]);
     });
 
@@ -888,6 +1239,8 @@ io.on('connection', (socket) => {
         }
 
         participant.hasMedia = true;
+        participant.hasVideo = true;
+        participant.hasAudio = true;
         io.to(room).emit('room-state', activeRooms[room]);
     });
 

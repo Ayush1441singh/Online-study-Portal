@@ -41,10 +41,14 @@
             <div class="glass-card p-6 min-w-[300px]">
                 <p class="text-[10px] text-slate-400 font-black uppercase tracking-[0.3em] mb-3">Security</p>
                 <h3 class="text-2xl font-black italic mb-2">Email OTP Enabled</h3>
-                <p class="text-slate-400 text-sm mb-4">Every login now requires your password and a 6-digit code sent to your email.</p>
+                <p class="text-slate-400 text-sm mb-4">Every login can stay protected with password + OTP, while passkey gives you a faster mobile-friendly option.</p>
                 <div class="rounded-2xl bg-white/5 border border-white/10 p-4">
                     <p class="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mb-2">Passkey</p>
-                    <p class="text-sm text-slate-300">Optional passkey support is planned next, so users can sign in with device PIN, phone approval, or biometrics when available.</p>
+                    <p id="passkeyStatus" class="text-sm text-slate-300">Checking whether this account already has a passkey...</p>
+                    <div class="mt-4 flex flex-col gap-3">
+                        <button id="addPasskeyButton" class="bg-indigo-600 py-3 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl shadow-indigo-500/20 hover:bg-indigo-500 transition">Add Mobile Passkey</button>
+                        <button id="removePasskeyButton" class="hidden bg-red-500/10 text-red-400 border border-red-500/20 py-3 rounded-2xl font-black uppercase text-xs tracking-widest">Remove Passkey</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -125,13 +129,148 @@
             document.getElementById('bioText').textContent = `"${userBio}"`;
         }
 
+        function base64UrlToBytes(value) {
+            const base64 = value.replace(/-/g, '+').replace(/_/g, '/');
+            const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=');
+            return Uint8Array.from(atob(padded), (char) => char.charCodeAt(0));
+        }
+
+        function bytesToBase64Url(value) {
+            const bytes = value instanceof ArrayBuffer ? new Uint8Array(value) : new Uint8Array(value.buffer || value);
+            let binary = '';
+            bytes.forEach((byte) => {
+                binary += String.fromCharCode(byte);
+            });
+            return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+        }
+
+        function normalizeCreationOptions(publicKey) {
+            return {
+                ...publicKey,
+                challenge: base64UrlToBytes(publicKey.challenge),
+                user: {
+                    ...publicKey.user,
+                    id: base64UrlToBytes(publicKey.user.id)
+                },
+                excludeCredentials: (publicKey.excludeCredentials || []).map((item) => ({
+                    ...item,
+                    id: base64UrlToBytes(item.id)
+                }))
+            };
+        }
+
+        function serializeRegistrationCredential(credential) {
+            const response = credential.response;
+            const exportedKey = response.getPublicKey ? response.getPublicKey() : null;
+
+            if (!exportedKey) {
+                throw new Error('This browser did not return the passkey public key. Try Chrome, Edge, or another modern browser.');
+            }
+
+            return {
+                id: credential.id,
+                rawId: bytesToBase64Url(credential.rawId),
+                type: credential.type,
+                response: {
+                    clientDataJSON: bytesToBase64Url(response.clientDataJSON),
+                    attestationObject: response.attestationObject ? bytesToBase64Url(response.attestationObject) : null,
+                    publicKey: bytesToBase64Url(exportedKey),
+                    publicKeyAlgorithm: response.getPublicKeyAlgorithm ? response.getPublicKeyAlgorithm() : null,
+                    transports: response.getTransports ? response.getTransports() : []
+                }
+            };
+        }
+
+        async function refreshSecurityCard(messageOverride) {
+            const response = await fetch('/security-status');
+            if (!response.ok) {
+                return;
+            }
+
+            const data = await response.json();
+            const passkeyStatus = document.getElementById('passkeyStatus');
+            const removeButton = document.getElementById('removePasskeyButton');
+
+            if (messageOverride) {
+                passkeyStatus.textContent = messageOverride;
+            } else if (data.passkeyAvailable) {
+                passkeyStatus.textContent = 'Passkey is active on this account. You can use device PIN, fingerprint, Face ID, or cross-device phone approval.';
+            } else {
+                passkeyStatus.textContent = 'No passkey saved yet. Add one from this signed-in session so mobile sign-in becomes faster.';
+            }
+
+            removeButton.classList.toggle('hidden', !data.passkeyAvailable);
+        }
+
+        async function addPasskey() {
+            if (!window.PublicKeyCredential || !navigator.credentials) {
+                alert('This browser does not support passkeys.');
+                return;
+            }
+
+            const addButton = document.getElementById('addPasskeyButton');
+            addButton.disabled = true;
+            addButton.textContent = 'Preparing Passkey...';
+            await refreshSecurityCard('Preparing secure passkey setup...');
+
+            try {
+                const optionsResponse = await fetch('/passkey/register/options', { method: 'POST' });
+                const optionsData = await optionsResponse.json();
+                if (!optionsResponse.ok || !optionsData.success) {
+                    throw new Error(optionsData.message || 'Could not prepare passkey registration.');
+                }
+
+                const credential = await navigator.credentials.create({
+                    publicKey: normalizeCreationOptions(optionsData.publicKey)
+                });
+
+                if (!credential) {
+                    throw new Error('Passkey setup was cancelled.');
+                }
+
+                const verifyResponse = await fetch('/passkey/register/verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        label: 'Primary mobile passkey',
+                        credential: serializeRegistrationCredential(credential)
+                    })
+                });
+                const verifyData = await verifyResponse.json();
+                if (!verifyResponse.ok || !verifyData.success) {
+                    throw new Error(verifyData.message || 'Could not save the passkey.');
+                }
+
+                await refreshSecurityCard('Passkey saved. You can now use biometrics, PIN, or phone approval to sign in.');
+            } catch (error) {
+                await refreshSecurityCard(error.message || 'Passkey setup failed.');
+            } finally {
+                addButton.disabled = false;
+                addButton.textContent = 'Add Mobile Passkey';
+            }
+        }
+
+        async function removePasskey() {
+            const okay = confirm('Remove the saved passkey from this account?');
+            if (!okay) {
+                return;
+            }
+
+            const response = await fetch('/passkey', { method: 'DELETE' });
+            const data = await response.json();
+            await refreshSecurityCard(data.message || 'Passkey removed.');
+        }
+
         async function logoutUser() {
             await fetch('/logout', { method: 'POST' });
             window.location.href = '/login.html';
         }
 
         document.getElementById('logoutButton').addEventListener('click', logoutUser);
+        document.getElementById('addPasskeyButton').addEventListener('click', addPasskey);
+        document.getElementById('removePasskeyButton').addEventListener('click', removePasskey);
         loadCurrentUser();
+        refreshSecurityCard();
     </script>
 </body>
 </html>

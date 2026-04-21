@@ -38,7 +38,7 @@
 
         .shell {
             display: grid;
-            grid-template-columns: 280px 1fr 340px;
+            grid-template-columns: 220px minmax(0, 0.95fr) 420px;
             grid-template-rows: auto 1fr;
             gap: 16px;
             height: 100vh;
@@ -108,6 +108,7 @@
             gap: 10px;
             flex-wrap: wrap;
             justify-content: flex-end;
+            align-items: center;
         }
 
         .btn {
@@ -150,10 +151,10 @@
         }
 
         .sidebar {
-            padding: 20px;
+            padding: 16px;
             display: flex;
             flex-direction: column;
-            gap: 16px;
+            gap: 12px;
             min-height: 0;
         }
 
@@ -172,6 +173,7 @@
             flex-direction: column;
             gap: 14px;
             min-height: 0;
+            overflow: hidden;
         }
 
         .eyebrow {
@@ -192,7 +194,7 @@
 
         .summary-title {
             margin-top: 10px;
-            font-size: 24px;
+            font-size: 20px;
             line-height: 1.15;
             font-weight: 700;
         }
@@ -200,8 +202,8 @@
         .summary-copy {
             margin-top: 10px;
             color: var(--muted);
-            font-size: 14px;
-            line-height: 1.6;
+            font-size: 13px;
+            line-height: 1.5;
             font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
         }
 
@@ -405,7 +407,7 @@
 
         .participant-strip {
             display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
+            grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 10px;
         }
 
@@ -491,6 +493,16 @@
             display: flex;
             flex-direction: column;
             gap: 10px;
+            padding-right: 4px;
+        }
+
+        .chat-box::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .chat-box::-webkit-scrollbar-thumb {
+            background: rgba(97, 117, 143, 0.26);
+            border-radius: 999px;
         }
 
         .message {
@@ -557,6 +569,63 @@
             color: white;
             cursor: pointer;
             box-shadow: 0 16px 28px rgba(41, 93, 255, 0.18);
+        }
+
+        .chat-shell {
+            flex: 1;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            padding: 16px;
+            border-radius: 24px;
+            background: linear-gradient(180deg, rgba(255,255,255,0.86), rgba(246,249,255,0.92));
+            border: 1px solid rgba(20, 36, 59, 0.06);
+        }
+
+        .chat-highlight {
+            padding: 14px 16px;
+            border-radius: 20px;
+            background: rgba(41, 93, 255, 0.06);
+            border: 1px solid rgba(41, 93, 255, 0.08);
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .menu-wrap {
+            position: relative;
+        }
+
+        .menu-btn {
+            width: 48px;
+            padding: 11px 0;
+        }
+
+        .menu-popover {
+            position: absolute;
+            top: calc(100% + 10px);
+            right: 0;
+            width: 220px;
+            padding: 10px;
+            border-radius: 18px;
+            border: 1px solid rgba(20, 36, 59, 0.08);
+            background: rgba(255,255,255,0.96);
+            box-shadow: 0 18px 40px rgba(20, 36, 59, 0.12);
+            display: none;
+            z-index: 10;
+        }
+
+        .menu-popover.open {
+            display: grid;
+            gap: 8px;
+        }
+
+        .menu-popover .btn {
+            width: 100%;
+            justify-content: flex-start;
+            display: inline-flex;
         }
 
         .toast {
@@ -650,6 +719,11 @@
             .chat-form { flex-direction: column; }
             .chat-input { width: 100%; }
             .send-btn { width: 100%; height: 48px; }
+            .menu-popover {
+                left: 0;
+                right: auto;
+                width: min(220px, calc(100vw - 48px));
+            }
         }
     </style>
 </head>
@@ -683,8 +757,13 @@
                 <button id="cameraBtn" class="btn"><i class="fas fa-video mr-2"></i>Camera</button>
                 <button id="micBtn" class="btn"><i class="fas fa-microphone mr-2"></i>Mic</button>
                 <button id="shareBtn" class="btn primary"><i class="fas fa-display mr-2"></i>Share Screen</button>
-                <button id="whiteboardBtn" class="btn"><i class="fas fa-pen-ruler mr-2"></i>Whiteboard</button>
-                <button id="clearBtn" class="btn warn"><i class="fas fa-trash mr-2"></i>Clear Chat</button>
+                <div class="menu-wrap">
+                    <button id="moreBtn" class="btn menu-btn" type="button" aria-expanded="false" aria-controls="moreMenu"><i class="fas fa-ellipsis-vertical"></i></button>
+                    <div id="moreMenu" class="menu-popover">
+                        <button id="whiteboardBtn" class="btn" type="button"><i class="fas fa-pen-ruler mr-2"></i>Whiteboard</button>
+                        <button id="clearBtn" class="btn warn" type="button"><i class="fas fa-trash mr-2"></i>Clear Chat</button>
+                    </div>
+                </div>
             </div>
         </header>
 
@@ -770,20 +849,24 @@
             <div class="chat-top">
                 <div>
                     <div class="eyebrow">Class Chat</div>
-                    <div class="room-copy mt-2">Use this for doubts, answers, and quick notes without covering the main lesson.</div>
+                    <div class="room-copy mt-2">Bigger chat rail for doubts, answers, and quick notes while the lesson keeps flowing.</div>
                 </div>
                 <button id="aiToggleBtn" class="btn"><i class="fas fa-robot mr-2"></i>Study AI</button>
             </div>
 
-            <div id="chatBox" class="chat-box"></div>
+            <div class="chat-shell">
+                <div class="chat-highlight">Quick recap, timestamps, and short doubts fit here better now, so the chat feels useful instead of squeezed.</div>
 
-            <form id="chatForm" class="chat-form">
-                <div class="chat-input">
-                    <i class="fas fa-pen text-slate-400"></i>
-                    <input id="messageInput" placeholder="Ask a doubt or share a short note...">
-                </div>
-                <button class="send-btn" type="submit"><i class="fas fa-paper-plane"></i></button>
-            </form>
+                <div id="chatBox" class="chat-box"></div>
+
+                <form id="chatForm" class="chat-form">
+                    <div class="chat-input">
+                        <i class="fas fa-pen text-slate-400"></i>
+                        <input id="messageInput" placeholder="Ask a doubt or share a short note...">
+                    </div>
+                    <button class="send-btn" type="submit"><i class="fas fa-paper-plane"></i></button>
+                </form>
+            </div>
 
             <div id="aiPanel" class="presence-box hidden">
                 <div class="chat-top">
@@ -819,7 +902,7 @@
         remoteStreams: new Map(),
         remoteScreenStream: null,
         myPeerId: null,
-        isMicEnabled: true,
+        isMicEnabled: false,
         isCameraEnabled: false,
     };
 
@@ -836,6 +919,8 @@
     const aiPanel = document.getElementById('aiPanel');
     const aiMessages = document.getElementById('aiMessages');
     const aiInput = document.getElementById('aiInput');
+    const moreBtn = document.getElementById('moreBtn');
+    const moreMenu = document.getElementById('moreMenu');
 
     roomTitle.textContent = currentRoom;
     roomMetric.textContent = currentRoom.slice(0, 3).toUpperCase();
@@ -859,7 +944,7 @@
 
     function updateMetrics() {
         document.getElementById('onlineMetric').textContent = state.participants.length;
-        document.getElementById('cameraMetric').textContent = state.participants.filter((participant) => participant.hasMedia).length;
+        document.getElementById('cameraMetric').textContent = state.participants.filter((participant) => participant.hasVideo).length;
         document.getElementById('shareMetric').textContent = state.currentScreenSharer ? 'Live' : 'Off';
     }
 
@@ -888,7 +973,7 @@
                     <div class="avatar">${getInitials(participant.username)}</div>
                     <div>
                         <div class="presence-name">${participant.username}${participant.username === state.currentUser ? ' (You)' : ''}</div>
-                        <div class="presence-note">${participant.peerId ? 'Connected for live collaboration' : 'Joining room media'}</div>
+                        <div class="presence-note">${participant.hasVideo ? 'Camera visible in room' : participant.hasAudio ? 'Mic live in room' : participant.peerId ? 'Connected for live collaboration' : 'Joining room media'}</div>
                     </div>
                 </div>
                 <span class="status-badge ${participant.hasMedia ? 'status-live' : 'status-idle'}">${participant.hasMedia ? 'Live' : 'Idle'}</span>
@@ -899,6 +984,7 @@
 
     function renderVideoTiles() {
         const tiles = [];
+        const localFlags = getStreamFlags(state.localStream);
 
         const localTile = document.createElement('div');
         localTile.className = 'tile';
@@ -917,7 +1003,7 @@
             </div>
         `;
 
-        if (state.localStream) {
+        if (state.localStream && localFlags.hasVideo) {
             const localVideo = document.createElement('video');
             localVideo.autoplay = true;
             localVideo.playsInline = true;
@@ -934,20 +1020,33 @@
             tile.className = 'tile';
             const participant = state.participants.find((item) => item.peerId === peerId);
             const name = participant ? participant.username : 'Participant';
+            const hasVideo = participant ? participant.hasVideo : entry.hasVideo;
+            const hasAudio = participant ? participant.hasAudio : entry.hasAudio;
 
-            const video = document.createElement('video');
-            video.autoplay = true;
-            video.playsInline = true;
-            video.srcObject = entry.stream;
-            tile.appendChild(video);
+            if (hasVideo) {
+                const video = document.createElement('video');
+                video.autoplay = true;
+                video.playsInline = true;
+                video.srcObject = entry.stream;
+                tile.appendChild(video);
+            } else {
+                const empty = document.createElement('div');
+                empty.className = 'tile-empty';
+                empty.innerHTML = `
+                    <i class="fas fa-user-circle text-2xl text-slate-400"></i>
+                    <div class="font-semibold">${name}</div>
+                    <div class="text-sm">${hasAudio ? 'Audio is live. Camera is currently off.' : 'Waiting for camera or mic to go live.'}</div>
+                `;
+                tile.appendChild(empty);
+            }
 
             const bar = document.createElement('div');
             bar.className = 'tile-bar';
             bar.innerHTML = `
                 <div class="tile-name">${name}</div>
                 <div class="tile-flags">
-                    <span class="flag ${entry.hasVideo ? 'live' : 'muted'}"></span>
-                    <span class="flag ${entry.hasAudio ? 'live' : 'muted'}"></span>
+                    <span class="flag ${hasVideo ? 'live' : 'muted'}"></span>
+                    <span class="flag ${hasAudio ? 'live' : 'muted'}"></span>
                 </div>
             `;
             tile.appendChild(bar);
@@ -978,10 +1077,19 @@
     }
 
     function getStreamFlags(stream) {
+        if (!stream) {
+            return { hasVideo: false, hasAudio: false };
+        }
+
         return {
             hasVideo: stream.getVideoTracks().some((track) => track.readyState === 'live' && track.enabled),
             hasAudio: stream.getAudioTracks().some((track) => track.readyState === 'live' && track.enabled),
         };
+    }
+
+    function closeMenu() {
+        moreMenu.classList.remove('open');
+        moreBtn.setAttribute('aria-expanded', 'false');
     }
 
     function closeCallsByType(type) {
@@ -1007,7 +1115,8 @@
 
     function attachCallHandlers(call, type, peerIdOverride) {
         const remotePeerId = peerIdOverride || call.peer;
-        state.activeCalls.set(call.connectionId || `${type}-${remotePeerId}-${Date.now()}`, { call, type, peerId: remotePeerId });
+        const callKey = call.connectionId || `${type}-${remotePeerId}-${Date.now()}`;
+        state.activeCalls.set(callKey, { call, type, peerId: remotePeerId });
 
         call.on('stream', (incomingStream) => {
             if (type === 'screen') {
@@ -1021,6 +1130,7 @@
         });
 
         call.on('close', () => {
+            state.activeCalls.delete(callKey);
             if (type === 'screen') {
                 state.remoteScreenStream = null;
                 if (!state.screenStream) {
@@ -1033,6 +1143,7 @@
         });
 
         call.on('error', () => {
+            state.activeCalls.delete(callKey);
             if (type === 'screen') {
                 state.remoteScreenStream = null;
                 if (!state.screenStream) {
@@ -1052,7 +1163,48 @@
     }
 
     function syncMediaState() {
-        socket.emit('media-state-change', { room: currentRoom, hasMedia: Boolean(state.localStream) });
+        const mediaFlags = getStreamFlags(state.localStream);
+        socket.emit('media-state-change', {
+            room: currentRoom,
+            hasMedia: mediaFlags.hasVideo || mediaFlags.hasAudio,
+            hasVideo: mediaFlags.hasVideo,
+            hasAudio: mediaFlags.hasAudio,
+        });
+    }
+
+    function stopLocalStream() {
+        if (!state.localStream) {
+            return;
+        }
+
+        state.localStream.getTracks().forEach((track) => track.stop());
+        state.localStream = null;
+    }
+
+    async function refreshLocalMedia() {
+        const wantsVideo = state.isCameraEnabled;
+        const wantsAudio = state.isMicEnabled;
+
+        stopLocalStream();
+        closeCallsByType('media');
+        state.remoteStreams.clear();
+
+        if (!wantsVideo && !wantsAudio) {
+            syncMediaState();
+            refreshRoomUi();
+            return null;
+        }
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: wantsVideo,
+            audio: wantsAudio,
+        });
+
+        state.localStream = stream;
+        syncMediaState();
+        refreshRoomUi();
+        syncPeerConnections();
+        return stream;
     }
 
     function connectToParticipant(participant) {
@@ -1075,62 +1227,54 @@
             .forEach(connectToParticipant);
     }
 
-    async function ensureLocalMedia() {
+    async function ensureLocalMedia(preferredSource) {
         if (state.localStream) {
             return state.localStream;
         }
 
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        state.localStream = stream;
-        state.isCameraEnabled = true;
-        state.isMicEnabled = true;
-        syncMediaState();
+        if (preferredSource === 'mic' && !state.isCameraEnabled && !state.isMicEnabled) {
+            state.isMicEnabled = true;
+        }
+
+        if (preferredSource !== 'mic' && !state.isCameraEnabled && !state.isMicEnabled) {
+            state.isCameraEnabled = true;
+            state.isMicEnabled = true;
+        }
+
+        const stream = await refreshLocalMedia();
         updateControlStates();
-        renderVideoTiles();
-        syncPeerConnections();
-        showToast('Camera and microphone are live.');
+        showToast(stream && state.isCameraEnabled && state.isMicEnabled ? 'Camera and microphone are live.' : 'Media is live.');
         return stream;
     }
 
     async function toggleCamera() {
-        if (!state.localStream) {
-            try {
-                await ensureLocalMedia();
-                return;
-            } catch (error) {
-                alert('Camera or microphone access was denied.');
-                return;
-            }
-        }
-
         const nextState = !state.isCameraEnabled;
-        state.localStream.getVideoTracks().forEach((track) => {
-            track.enabled = nextState;
-        });
         state.isCameraEnabled = nextState;
-        updateControlStates();
-        renderVideoTiles();
-        showToast(nextState ? 'Camera turned on.' : 'Camera turned off.');
+
+        try {
+            await refreshLocalMedia();
+            updateControlStates();
+            showToast(nextState ? 'Camera turned on.' : 'Camera turned off.');
+        } catch (error) {
+            state.isCameraEnabled = !nextState;
+            updateControlStates();
+            showToast('Camera access was denied.');
+        }
     }
 
     async function toggleMic() {
-        if (!state.localStream) {
-            try {
-                await ensureLocalMedia();
-                return;
-            } catch (error) {
-                alert('Microphone access was denied.');
-                return;
-            }
-        }
+        const nextState = !state.isMicEnabled;
+        state.isMicEnabled = nextState;
 
-        state.isMicEnabled = !state.isMicEnabled;
-        state.localStream.getAudioTracks().forEach((track) => {
-            track.enabled = state.isMicEnabled;
-        });
-        updateControlStates();
-        renderVideoTiles();
-        showToast(state.isMicEnabled ? 'Microphone unmuted.' : 'Microphone muted.');
+        try {
+            await refreshLocalMedia();
+            updateControlStates();
+            showToast(nextState ? 'Microphone unmuted.' : 'Microphone muted.');
+        } catch (error) {
+            state.isMicEnabled = !nextState;
+            updateControlStates();
+            showToast('Microphone access was denied.');
+        }
     }
 
     async function startScreenShare() {
@@ -1308,8 +1452,14 @@
     document.getElementById('cameraBtn').addEventListener('click', toggleCamera);
     document.getElementById('micBtn').addEventListener('click', toggleMic);
     document.getElementById('shareBtn').addEventListener('click', startScreenShare);
-    document.getElementById('whiteboardBtn').addEventListener('click', () => window.toggleWhiteboard());
-    document.getElementById('clearBtn').addEventListener('click', clearChat);
+    document.getElementById('whiteboardBtn').addEventListener('click', () => {
+        closeMenu();
+        window.toggleWhiteboard();
+    });
+    document.getElementById('clearBtn').addEventListener('click', async () => {
+        closeMenu();
+        await clearChat();
+    });
     document.getElementById('fullscreenBtn').addEventListener('click', enterFullscreen);
     document.getElementById('aiToggleBtn').addEventListener('click', toggleAIPanel);
     document.getElementById('closeAiBtn').addEventListener('click', toggleAIPanel);
@@ -1330,6 +1480,18 @@
 
         socket.emit('chat message', { room: currentRoom, msg });
         input.value = '';
+    });
+
+    moreBtn.addEventListener('click', () => {
+        const willOpen = !moreMenu.classList.contains('open');
+        moreMenu.classList.toggle('open', willOpen);
+        moreBtn.setAttribute('aria-expanded', String(willOpen));
+    });
+
+    document.addEventListener('click', (event) => {
+        if (!moreMenu.contains(event.target) && !moreBtn.contains(event.target)) {
+            closeMenu();
+        }
     });
 
     const canvas = document.getElementById('wbCanvas');
@@ -1402,6 +1564,10 @@
             window.location.href = '/login.html';
         }
     }
+
+    window.addEventListener('beforeunload', () => {
+        stopLocalStream();
+    });
 
     updateControlStates();
     initializeRoom();

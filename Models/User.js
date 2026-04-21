@@ -38,6 +38,32 @@ const userSchema = new mongoose.Schema({
         type: Date
     },
 
+    passkeyCredentialId: {
+        type: String
+    },
+
+    passkeyPublicKey: {
+        type: String
+    },
+
+    passkeyCounter: {
+        type: Number,
+        default: 0
+    },
+
+    passkeyTransports: {
+        type: [String],
+        default: undefined
+    },
+
+    passkeyLabel: {
+        type: String
+    },
+
+    passkeyCreatedAt: {
+        type: Date
+    },
+
     createdAt: { 
         type: Date, 
         default: Date.now 
