@@ -104,6 +104,54 @@
             faceStream: null
         };
 
+        function wait(ms) {
+            return new Promise((resolve) => setTimeout(resolve, ms));
+        }
+
+        async function ensureVideoReady(video) {
+            if (video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0) {
+                return;
+            }
+
+            await new Promise((resolve, reject) => {
+                const timeoutId = setTimeout(() => reject(new Error('Camera is not ready yet. Please retry.')), 8000);
+
+                function cleanup() {
+                    clearTimeout(timeoutId);
+                    video.removeEventListener('loadedmetadata', onReady);
+                    video.removeEventListener('canplay', onReady);
+                }
+
+                function onReady() {
+                    cleanup();
+                    resolve();
+                }
+
+                video.addEventListener('loadedmetadata', onReady, { once: true });
+                video.addEventListener('canplay', onReady, { once: true });
+            });
+        }
+
+        async function detectFaceDescriptor(video, statusNode) {
+            await ensureVideoReady(video);
+
+            for (let attempt = 0; attempt < 5; attempt += 1) {
+                const detection = await faceapi
+                    .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 }))
+                    .withFaceLandmarks()
+                    .withFaceDescriptor();
+
+                if (detection) {
+                    return detection;
+                }
+
+                statusNode.textContent = 'Looking for a clear face... keep still and face the camera.';
+                await wait(500);
+            }
+
+            return null;
+        }
+
         function openProfileModal() {
             document.getElementById('editModal').style.display = 'flex';
         }
@@ -185,7 +233,10 @@
             try {
                 await ensureFaceModels();
                 state.faceStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-                document.getElementById('faceVideo').srcObject = state.faceStream;
+                const faceVideo = document.getElementById('faceVideo');
+                faceVideo.srcObject = state.faceStream;
+                await faceVideo.play();
+                await ensureVideoReady(faceVideo);
                 document.getElementById('faceEnrollStatus').textContent = 'Camera ready. Keep your face centered and well-lit.';
             } catch (error) {
                 document.getElementById('faceEnrollStatus').textContent = 'Unable to start the camera or load models.';
@@ -206,13 +257,13 @@
         async function captureFace() {
             const status = document.getElementById('faceEnrollStatus');
             const video = document.getElementById('faceVideo');
+            const captureButton = document.getElementById('captureFaceButton');
             status.textContent = 'Scanning face...';
+            captureButton.disabled = true;
+            captureButton.textContent = 'Scanning...';
 
             try {
-                const detection = await faceapi
-                    .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 }))
-                    .withFaceLandmarks()
-                    .withFaceDescriptor();
+                const detection = await detectFaceDescriptor(video, status);
 
                 if (!detection) {
                     throw new Error('No face detected. Please face the camera directly and try again.');
@@ -234,6 +285,9 @@
                 setTimeout(closeFaceModal, 900);
             } catch (error) {
                 status.textContent = error.message || 'Enrollment failed.';
+            } finally {
+                captureButton.disabled = false;
+                captureButton.textContent = 'Capture Face';
             }
         }
 

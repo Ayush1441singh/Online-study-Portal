@@ -29,7 +29,56 @@
         const FACE_MODEL_URL = 'https://justadudewhohacks.github.io/face-api.js/models';
         const faceVideo = document.getElementById('faceVideo');
         const statusText = document.getElementById('statusText');
+        const verifyButton = document.getElementById('verifyButton');
         let currentStream = null;
+
+        function wait(ms) {
+            return new Promise((resolve) => setTimeout(resolve, ms));
+        }
+
+        async function ensureVideoReady(video) {
+            if (video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0) {
+                return;
+            }
+
+            await new Promise((resolve, reject) => {
+                const timeoutId = setTimeout(() => reject(new Error('Camera is not ready yet. Please retry.')), 8000);
+
+                function cleanup() {
+                    clearTimeout(timeoutId);
+                    video.removeEventListener('loadedmetadata', onReady);
+                    video.removeEventListener('canplay', onReady);
+                }
+
+                function onReady() {
+                    cleanup();
+                    resolve();
+                }
+
+                video.addEventListener('loadedmetadata', onReady, { once: true });
+                video.addEventListener('canplay', onReady, { once: true });
+            });
+        }
+
+        async function detectFaceDescriptor(video) {
+            await ensureVideoReady(video);
+
+            for (let attempt = 0; attempt < 5; attempt += 1) {
+                const detection = await faceapi
+                    .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 }))
+                    .withFaceLandmarks()
+                    .withFaceDescriptor();
+
+                if (detection) {
+                    return detection;
+                }
+
+                statusText.textContent = 'Looking for a clear face... keep still and face the camera.';
+                await wait(500);
+            }
+
+            return null;
+        }
 
         async function loadModels() {
             await Promise.all([
@@ -46,17 +95,18 @@
 
             currentStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
             faceVideo.srcObject = currentStream;
+            await faceVideo.play();
+            await ensureVideoReady(faceVideo);
             statusText.textContent = 'Camera ready. Keep your face centered and press Verify Face.';
         }
 
         async function verifyFace() {
             statusText.textContent = 'Scanning...';
+            verifyButton.disabled = true;
+            verifyButton.textContent = 'Verifying...';
 
             try {
-                const detection = await faceapi
-                    .detectSingleFace(faceVideo, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 }))
-                    .withFaceLandmarks()
-                    .withFaceDescriptor();
+                const detection = await detectFaceDescriptor(faceVideo);
 
                 if (!detection) {
                     throw new Error('No face detected. Try again in a brighter position.');
@@ -77,6 +127,9 @@
                 window.location.href = '/dashboard.html';
             } catch (error) {
                 statusText.textContent = error.message || 'Face verification failed.';
+            } finally {
+                verifyButton.disabled = false;
+                verifyButton.textContent = 'Verify Face';
             }
         }
 
