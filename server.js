@@ -10,6 +10,7 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const User = require('./Models/User.js');
 const Message = require('./Models/message.js');
+const RoomNote = require('./Models/RoomNote.js');
 
 const app = express();
 const server = http.createServer(app);
@@ -46,10 +47,13 @@ if (!geminiApiKey) {
 const activeRooms = {};
 const rateLimitStore = new Map();
 const passkeyChallengeStore = new Map();
-
-const aiModel = geminiApiKey
-    ? new GoogleGenerativeAI(geminiApiKey).getGenerativeModel({ model: 'gemini-pro' })
-    : null;
+const geminiClient = geminiApiKey ? new GoogleGenerativeAI(geminiApiKey) : null;
+const aiModelCandidates = [
+    process.env.GEMINI_MODEL,
+    'gemini-2.5-flash',
+    'gemini-2.0-flash',
+    'gemini-1.5-flash',
+].filter(Boolean);
 
 function createMailTransport() {
     if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
@@ -564,6 +568,63 @@ app.get('/me', requireAuth, (req, res) => {
     });
 });
 
+app.get('/room-notes/:room', requireAuth, async (req, res) => {
+    try {
+        const room = sanitizeRoomName(req.params.room);
+        if (!room) {
+            return res.status(400).json({ success: false, message: 'Invalid room.' });
+        }
+
+        const note = await RoomNote.findOne({
+            room,
+            userId: req.user.id,
+        }).lean();
+
+        res.status(200).json({
+            success: true,
+            content: note ? note.content : '',
+            updatedAt: note && note.updatedAt ? note.updatedAt.toISOString() : null,
+        });
+    } catch (error) {
+        console.error('Room notes fetch error:', error);
+        res.status(500).json({ success: false, message: 'Could not load notes.' });
+    }
+});
+
+app.put('/room-notes/:room', requireAuth, rateLimiter({ windowMs: 60 * 1000, maxRequests: 30, keyPrefix: 'room-notes-save' }), async (req, res) => {
+    try {
+        const room = sanitizeRoomName(req.params.room);
+        const content = typeof req.body.content === 'string' ? req.body.content.trim().slice(0, 12000) : '';
+
+        if (!room) {
+            return res.status(400).json({ success: false, message: 'Invalid room.' });
+        }
+
+        const note = await RoomNote.findOneAndUpdate(
+            { room, userId: req.user.id },
+            {
+                room,
+                userId: req.user.id,
+                content,
+                updatedAt: new Date(),
+            },
+            {
+                upsert: true,
+                new: true,
+                setDefaultsOnInsert: true,
+            }
+        ).lean();
+
+        res.status(200).json({
+            success: true,
+            updatedAt: note.updatedAt.toISOString(),
+        });
+    } catch (error) {
+        console.error('Room notes save error:', error);
+        res.status(500).json({ success: false, message: 'Could not save notes.' });
+    }
+});
+
 app.get('/security-status', requireAuth, async (req, res) => {
     const user = await User.findById(req.user.id).select('passkeyCredentialId passkeyCreatedAt');
     res.status(200).json({
@@ -1043,13 +1104,35 @@ app.post('/ask-ai', requireAuth, rateLimiter({ windowMs: 60 * 1000, maxRequests:
             return res.status(400).json({ answer: 'Please enter a valid prompt.' });
         }
 
-        if (!aiModel) {
-            return res.status(503).json({ answer: 'AI service is not configured on the server.' });
+        if (!geminiClient) {
+            return res.status(503).json({
+                answer: 'AI assistant is not configured yet. Add a valid `GEMINI_API_KEY` in Render environment variables.',
+            });
         }
 
-        const result = await aiModel.generateContent(`Provide a professional academic response to: ${prompt}`);
-        const aiResponse = await result.response;
-        res.status(200).json({ answer: aiResponse.text() });
+        let lastError = null;
+
+        for (const modelName of aiModelCandidates) {
+            try {
+                const model = geminiClient.getGenerativeModel({ model: modelName });
+                const result = await model.generateContent(
+                    `You are a helpful study assistant. Give a clear, concise, student-friendly answer.\n\nQuestion: ${prompt}`
+                );
+                const aiResponse = await result.response;
+                const answer = aiResponse.text();
+
+                if (answer) {
+                    return res.status(200).json({ answer });
+                }
+            } catch (error) {
+                lastError = error;
+            }
+        }
+
+        console.error('AI model fallback error:', lastError);
+        res.status(503).json({
+            answer: 'AI assistant could not respond right now. Check the `GEMINI_API_KEY` and optional `GEMINI_MODEL` in Render.',
+        });
     } catch (error) {
         console.error('AI error:', error);
         res.status(500).json({ answer: 'The AI service is currently unavailable.' });

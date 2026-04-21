@@ -18,6 +18,8 @@
             --text: #14243b;
             --muted: #61758f;
             --accent: #295dff;
+            --accent-teal: #1dbf9a;
+            --accent-gold: #f5b54c;
             --accent-soft: rgba(41, 93, 255, 0.08);
             --green: #1e9d68;
             --red: #d95a6f;
@@ -31,7 +33,9 @@
             font-family: Georgia, "Times New Roman", serif;
             color: var(--text);
             background:
+                radial-gradient(circle at left center, rgba(29, 191, 154, 0.08), transparent 18%),
                 radial-gradient(circle at top right, rgba(41, 93, 255, 0.08), transparent 18%),
+                radial-gradient(circle at bottom right, rgba(245, 181, 76, 0.08), transparent 22%),
                 linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 100%);
             overflow: hidden;
         }
@@ -59,6 +63,7 @@
             align-items: center;
             justify-content: space-between;
             padding: 18px 22px;
+            background: linear-gradient(135deg, rgba(255,255,255,0.94), rgba(246,250,255,0.92));
         }
 
         .brand {
@@ -188,7 +193,9 @@
         .study-summary {
             padding: 18px;
             border-radius: 22px;
-            background: linear-gradient(180deg, rgba(255,255,255,0.88), rgba(247,250,255,0.88));
+            background:
+                radial-gradient(circle at top left, rgba(29, 191, 154, 0.12), transparent 34%),
+                linear-gradient(180deg, rgba(255,255,255,0.92), rgba(247,250,255,0.9));
             border: 1px solid rgba(20, 36, 59, 0.06);
         }
 
@@ -330,7 +337,9 @@
             gap: 12px;
             padding: 16px;
             border-radius: 24px;
-            background: var(--panel-strong);
+            background:
+                radial-gradient(circle at top right, rgba(41, 93, 255, 0.08), transparent 22%),
+                linear-gradient(180deg, rgba(255,255,255,0.97), rgba(248,251,255,0.96));
             border: 1px solid rgba(20, 36, 59, 0.06);
             min-height: 0;
             flex: 1;
@@ -369,6 +378,8 @@
             border-radius: 22px;
             overflow: hidden;
             background:
+                radial-gradient(circle at top left, rgba(41, 93, 255, 0.1), transparent 24%),
+                radial-gradient(circle at bottom right, rgba(29, 191, 154, 0.08), transparent 28%),
                 linear-gradient(180deg, #f8fbff 0%, #eef4fb 100%);
             border: 1px solid rgba(20, 36, 59, 0.08);
         }
@@ -628,19 +639,146 @@
             gap: 14px;
             padding: 16px;
             border-radius: 24px;
-            background: linear-gradient(180deg, rgba(255,255,255,0.86), rgba(246,249,255,0.92));
+            background:
+                radial-gradient(circle at top right, rgba(245, 181, 76, 0.08), transparent 22%),
+                linear-gradient(180deg, rgba(255,255,255,0.92), rgba(246,249,255,0.96));
             border: 1px solid rgba(20, 36, 59, 0.06);
         }
 
         .chat-highlight {
             padding: 14px 16px;
             border-radius: 20px;
-            background: rgba(41, 93, 255, 0.06);
-            border: 1px solid rgba(41, 93, 255, 0.08);
+            background: linear-gradient(135deg, rgba(41, 93, 255, 0.08), rgba(29, 191, 154, 0.09));
+            border: 1px solid rgba(41, 93, 255, 0.1);
             font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
             color: var(--muted);
             font-size: 13px;
             line-height: 1.5;
+        }
+
+        .study-toolkit {
+            display: grid;
+            gap: 12px;
+        }
+
+        .tool-card {
+            padding: 14px;
+            border-radius: 20px;
+            background: rgba(255,255,255,0.82);
+            border: 1px solid rgba(20, 36, 59, 0.06);
+        }
+
+        .tool-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .tool-title {
+            font-size: 11px;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            font-weight: 800;
+            color: var(--muted);
+        }
+
+        .timer-pill {
+            min-width: 88px;
+            padding: 8px 12px;
+            border-radius: 999px;
+            background: rgba(29, 191, 154, 0.1);
+            color: #0f8a6d;
+            text-align: center;
+            font-size: 12px;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            font-weight: 800;
+        }
+
+        .tool-actions, .filter-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .mini-btn {
+            border: 1px solid rgba(20, 36, 59, 0.08);
+            background: rgba(255,255,255,0.9);
+            color: var(--text);
+            padding: 8px 11px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 10px;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            font-weight: 800;
+        }
+
+        .mini-btn.active {
+            background: rgba(41, 93, 255, 0.08);
+            color: #1845c8;
+            border-color: rgba(41, 93, 255, 0.18);
+        }
+
+        .notes-area {
+            width: 100%;
+            min-height: 104px;
+            resize: vertical;
+            border: 1px solid rgba(20, 36, 59, 0.08);
+            border-radius: 16px;
+            padding: 12px 14px;
+            outline: none;
+            background: rgba(247, 250, 255, 0.96);
+            color: var(--text);
+            font-size: 13px;
+            line-height: 1.5;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .notes-foot {
+            margin-top: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            color: var(--muted);
+            font-size: 11px;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .message.hidden-by-filter {
+            display: none;
+        }
+
+        .message-tag {
+            display: inline-flex;
+            align-items: center;
+            margin-bottom: 8px;
+            padding: 5px 8px;
+            border-radius: 999px;
+            font-size: 9px;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            font-weight: 800;
+        }
+
+        .tag-doubt {
+            background: rgba(245, 181, 76, 0.16);
+            color: #aa6b00;
+        }
+
+        .tag-answer {
+            background: rgba(29, 191, 154, 0.14);
+            color: #0f8a6d;
+        }
+
+        .tag-note {
+            background: rgba(41, 93, 255, 0.1);
+            color: #1845c8;
         }
 
         .menu-wrap {
@@ -929,6 +1067,43 @@
             <div class="chat-shell">
                 <div class="chat-highlight">Quick recap, timestamps, and short doubts fit here better now, so the chat feels useful instead of squeezed.</div>
 
+                <div class="study-toolkit">
+                    <div class="tool-card">
+                        <div class="tool-head">
+                            <div class="tool-title">Focus Timer</div>
+                            <div id="focusTimer" class="timer-pill">25:00</div>
+                        </div>
+                        <div class="tool-actions">
+                            <button id="startTimerBtn" class="mini-btn" type="button">Start</button>
+                            <button id="resetTimerBtn" class="mini-btn" type="button">Reset</button>
+                        </div>
+                    </div>
+
+                    <div class="tool-card">
+                        <div class="tool-head">
+                            <div class="tool-title">My Notes</div>
+                            <button id="copyNotesBtn" class="mini-btn" type="button">Copy</button>
+                        </div>
+                        <textarea id="notesInput" class="notes-area" placeholder="Write formulas, key points, doubts, and revision notes here..."></textarea>
+                        <div class="notes-foot">
+                            <span id="notesStatus">Notes are loading...</span>
+                            <span>Auto-save on</span>
+                        </div>
+                    </div>
+
+                    <div class="tool-card">
+                        <div class="tool-head">
+                            <div class="tool-title">Chat Filter</div>
+                        </div>
+                        <div class="filter-row">
+                            <button class="mini-btn active" type="button" data-filter="all">All</button>
+                            <button class="mini-btn" type="button" data-filter="doubt">Doubts</button>
+                            <button class="mini-btn" type="button" data-filter="answer">Answers</button>
+                            <button class="mini-btn" type="button" data-filter="note">Notes</button>
+                        </div>
+                    </div>
+                </div>
+
                 <div id="chatBox" class="chat-box"></div>
 
                 <form id="chatForm" class="chat-form">
@@ -1004,13 +1179,23 @@
     const aiPanel = document.getElementById('aiPanel');
     const aiMessages = document.getElementById('aiMessages');
     const aiInput = document.getElementById('aiInput');
+    const notesInput = document.getElementById('notesInput');
+    const notesStatus = document.getElementById('notesStatus');
+    const focusTimer = document.getElementById('focusTimer');
     const moreBtn = document.getElementById('moreBtn');
     const moreMenu = document.getElementById('moreMenu');
     const stageInfoBtn = document.getElementById('stageInfoBtn');
     const stageInfoMenu = document.getElementById('stageInfoMenu');
+    const filterButtons = [...document.querySelectorAll('[data-filter]')];
 
     roomTitle.textContent = currentRoom;
     roomMetric.textContent = currentRoom.slice(0, 3).toUpperCase();
+
+    state.chatFilter = 'all';
+    state.notesSaveTimer = null;
+    state.focusDuration = 25 * 60;
+    state.focusRemaining = state.focusDuration;
+    state.focusInterval = null;
 
     function showToast(message) {
         toast.textContent = message;
@@ -1033,6 +1218,74 @@
         document.getElementById('onlineMetric').textContent = state.participants.length;
         document.getElementById('cameraMetric').textContent = state.participants.filter((participant) => participant.hasVideo).length;
         document.getElementById('shareMetric').textContent = state.currentScreenSharer ? 'Live' : 'Off';
+    }
+
+    function formatTimer(seconds) {
+        const mins = String(Math.floor(seconds / 60)).padStart(2, '0');
+        const secs = String(seconds % 60).padStart(2, '0');
+        return `${mins}:${secs}`;
+    }
+
+    function updateTimerUi() {
+        focusTimer.textContent = formatTimer(state.focusRemaining);
+    }
+
+    function inferMessageType(text) {
+        const normalized = (text || '').trim().toLowerCase();
+        if (normalized.startsWith('doubt:') || normalized.startsWith('q:') || normalized.includes('?')) {
+            return 'doubt';
+        }
+        if (normalized.startsWith('answer:') || normalized.startsWith('a:')) {
+            return 'answer';
+        }
+        return 'note';
+    }
+
+    function applyChatFilter() {
+        [...chatBox.children].forEach((message) => {
+            const type = message.dataset.type || 'note';
+            const visible = state.chatFilter === 'all' || state.chatFilter === type;
+            message.classList.toggle('hidden-by-filter', !visible);
+        });
+    }
+
+    function queueNotesSave() {
+        notesStatus.textContent = 'Saving notes...';
+        clearTimeout(state.notesSaveTimer);
+        state.notesSaveTimer = setTimeout(saveNotes, 700);
+    }
+
+    async function loadNotes() {
+        try {
+            const response = await fetch(`/room-notes/${encodeURIComponent(currentRoom)}`);
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                throw new Error(data.message || 'Could not load notes.');
+            }
+
+            notesInput.value = data.content || '';
+            notesStatus.textContent = data.updatedAt ? 'Notes synced.' : 'Fresh notes ready.';
+        } catch (error) {
+            notesStatus.textContent = 'Notes could not load.';
+        }
+    }
+
+    async function saveNotes() {
+        try {
+            const response = await fetch(`/room-notes/${encodeURIComponent(currentRoom)}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content: notesInput.value }),
+            });
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                throw new Error(data.message || 'Could not save notes.');
+            }
+
+            notesStatus.textContent = 'Notes saved.';
+        } catch (error) {
+            notesStatus.textContent = 'Notes save failed.';
+        }
     }
 
     function setScreenStage(stream, label) {
@@ -1460,17 +1713,25 @@
     function addMessageUI(data) {
         const message = document.createElement('div');
         message.className = `message ${data.user === state.currentUser ? 'me' : 'other'}`;
+        const type = inferMessageType(data.msg);
+        message.dataset.type = type;
 
         const author = document.createElement('div');
         author.className = 'message-user';
         author.textContent = data.user;
 
+        const tag = document.createElement('div');
+        tag.className = `message-tag tag-${type}`;
+        tag.textContent = type;
+
         const body = document.createElement('div');
         body.textContent = data.msg;
 
         message.appendChild(author);
+        message.appendChild(tag);
         message.appendChild(body);
         chatBox.appendChild(message);
+        applyChatFilter();
         chatBox.scrollTop = chatBox.scrollHeight;
     }
 
@@ -1569,10 +1830,56 @@
     document.getElementById('aiToggleBtn').addEventListener('click', toggleAIPanel);
     document.getElementById('closeAiBtn').addEventListener('click', toggleAIPanel);
     document.getElementById('askAiBtn').addEventListener('click', askAI);
+    document.getElementById('startTimerBtn').addEventListener('click', () => {
+        if (state.focusInterval) {
+            clearInterval(state.focusInterval);
+            state.focusInterval = null;
+            document.getElementById('startTimerBtn').textContent = 'Start';
+            return;
+        }
+
+        document.getElementById('startTimerBtn').textContent = 'Pause';
+        state.focusInterval = setInterval(() => {
+            if (state.focusRemaining <= 0) {
+                clearInterval(state.focusInterval);
+                state.focusInterval = null;
+                document.getElementById('startTimerBtn').textContent = 'Start';
+                focusTimer.textContent = 'Break';
+                showToast('Focus session complete. Take a short break.');
+                return;
+            }
+
+            state.focusRemaining -= 1;
+            updateTimerUi();
+        }, 1000);
+    });
+    document.getElementById('resetTimerBtn').addEventListener('click', () => {
+        clearInterval(state.focusInterval);
+        state.focusInterval = null;
+        state.focusRemaining = state.focusDuration;
+        document.getElementById('startTimerBtn').textContent = 'Start';
+        updateTimerUi();
+    });
+    document.getElementById('copyNotesBtn').addEventListener('click', async () => {
+        try {
+            await navigator.clipboard.writeText(notesInput.value);
+            notesStatus.textContent = 'Notes copied.';
+        } catch (error) {
+            notesStatus.textContent = 'Copy failed.';
+        }
+    });
     document.getElementById('aiInput').addEventListener('keydown', (event) => {
         if (event.key === 'Enter') {
             askAI();
         }
+    });
+    notesInput.addEventListener('input', queueNotesSave);
+    filterButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+            state.chatFilter = button.dataset.filter;
+            filterButtons.forEach((item) => item.classList.toggle('active', item === button));
+            applyChatFilter();
+        });
     });
 
     document.getElementById('chatForm').addEventListener('submit', (event) => {
@@ -1676,6 +1983,8 @@
             broadcastPeerReadiness();
             refreshRoomUi();
             updateControlStates();
+            updateTimerUi();
+            loadNotes();
         } catch (error) {
             window.location.href = '/login.html';
         }
