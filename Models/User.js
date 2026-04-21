@@ -2,13 +2,11 @@ const mongoose = require('mongoose');
 
 // --- USER SCHEMA DESIGN ---
 const userSchema = new mongoose.Schema({
-    // User ka naam (Dashboard pe dikhane ke liye)
     username: { 
         type: String, 
         required: true,
         trim: true 
     },
-    // Email (Unique hona chahiye taaki ek email se do account na banein)
     email: { 
         type: String, 
         required: true, 
@@ -16,12 +14,30 @@ const userSchema = new mongoose.Schema({
         lowercase: true,
         trim: true 
     },
-    // Hashed Password (Bcrypt wala encrypted string save hoga)
     password: { 
         type: String, 
         required: true 
     },
-    // Created At (Optional: Ye dekhne ke liye account kab bana)
+
+    // ✅ OTP FIELD (added)
+    otp: {
+        type: String
+    },
+
+    // ✅ OTP EXPIRY (added)
+    otpExpiry: {
+        type: Date
+    },
+
+    faceDescriptor: {
+        type: [Number],
+        default: undefined
+    },
+
+    faceDescriptorUpdatedAt: {
+        type: Date
+    },
+
     createdAt: { 
         type: Date, 
         default: Date.now 
@@ -29,5 +45,4 @@ const userSchema = new mongoose.Schema({
 });
 
 // --- EXPORT THE MODEL ---
-// Dhyaan rakhna yahan 'User' hi export ho kyunki server.js isi naam se dhoond raha hai
 module.exports = mongoose.model('User', userSchema);

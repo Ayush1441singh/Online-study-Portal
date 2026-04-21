@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - StudyPortal</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -11,31 +12,64 @@
 </head>
 <body class="h-screen flex items-center justify-center p-6">
     <div class="glass w-full max-w-md p-10 rounded-[2.5rem] shadow-2xl">
-        <h1 class="text-3xl font-black italic text-center text-indigo-500 mb-10 uppercase">STUDYPORTAL</h1>
+        <h1 class="text-3xl font-black italic text-center text-indigo-500 mb-4 uppercase">StudyPortal</h1>
+        <p class="text-center text-xs uppercase tracking-[0.25em] text-slate-500 font-bold mb-10">Password + Face Verification</p>
         <form id="loginForm" class="space-y-6">
             <input id="email" type="email" required placeholder="Email Address" class="w-full bg-white/5 border border-white/10 p-4 rounded-2xl outline-none focus:border-indigo-500">
             <input id="password" type="password" required placeholder="Password" class="w-full bg-white/5 border border-white/10 p-4 rounded-2xl outline-none focus:border-indigo-500">
-            <button type="submit" class="w-full bg-indigo-600 py-4 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl">Sign In</button>
+            <button id="loginButton" type="submit" class="w-full bg-indigo-600 py-4 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl">Sign In</button>
         </form>
+        <p id="statusMessage" class="hidden mt-5 text-center text-xs font-bold uppercase tracking-widest"></p>
         <p class="text-center mt-8 text-xs text-slate-500 font-bold uppercase tracking-widest">
             New here? <a href="/registers.html" class="text-indigo-400">Create Account</a>
         </p>
     </div>
     <script>
-        document.getElementById('loginForm').onsubmit = async (e) => {
-            e.preventDefault();
-            const res = await fetch('/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email: document.getElementById('email').value, password: document.getElementById('password').value })
-            });
-            const data = await res.json();
-            if (data.success) {
-                localStorage.setItem('username', data.username);
-                localStorage.setItem('userEmail', data.email);
+        const form = document.getElementById('loginForm');
+        const button = document.getElementById('loginButton');
+        const statusMessage = document.getElementById('statusMessage');
+
+        function showStatus(message, isError = false) {
+            statusMessage.textContent = message;
+            statusMessage.className = `mt-5 text-center text-xs font-bold uppercase tracking-widest ${isError ? 'text-red-400' : 'text-emerald-400'}`;
+        }
+
+        form.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            button.disabled = true;
+            button.textContent = 'Signing In...';
+            showStatus('Checking credentials...');
+
+            try {
+                const res = await fetch('/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: document.getElementById('email').value,
+                        password: document.getElementById('password').value
+                    })
+                });
+
+                const data = await res.json();
+                if (!res.ok || !data.success) {
+                    throw new Error(data.message || 'Login failed.');
+                }
+
+                if (data.requiresFaceVerification) {
+                    showStatus('Password accepted. Redirecting to face verification...');
+                    window.location.href = '/face-check.html';
+                    return;
+                }
+
+                showStatus('Login successful. Opening dashboard...');
                 window.location.href = '/dashboard.html';
-            } else { alert(data.message); }
-        };
+            } catch (error) {
+                showStatus(error.message || 'Authentication failed.', true);
+            } finally {
+                button.disabled = false;
+                button.textContent = 'Sign In';
+            }
+        });
     </script>
 </body>
 </html>

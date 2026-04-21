@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Face Verification - StudyPortal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+    <style>
+        body { background: #020617; color: white; font-family: 'Inter', sans-serif; }
+        .panel { background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(16px); border: 1px solid rgba(99, 102, 241, 0.25); }
+        #faceVideo { width: 100%; border-radius: 1.75rem; background: #0f172a; aspect-ratio: 4 / 3; object-fit: cover; }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-6">
+    <div class="panel w-full max-w-2xl rounded-[2.5rem] p-8 md:p-12 shadow-2xl">
+        <p class="text-center text-[10px] uppercase tracking-[0.35em] text-indigo-400 font-black mb-3">Step 2 of 2</p>
+        <h1 class="text-center text-3xl md:text-4xl font-black italic uppercase mb-4">Face Verification</h1>
+        <p class="text-center text-slate-400 max-w-xl mx-auto mb-8">Your password is correct. Complete the webcam check to finish signing in.</p>
+        <video id="faceVideo" autoplay muted playsinline></video>
+        <p id="statusText" class="text-center text-xs font-bold uppercase tracking-widest mt-6 text-slate-400">Loading models...</p>
+        <div class="mt-8 flex flex-col gap-4 md:flex-row">
+            <button id="retryButton" class="flex-1 bg-white/5 border border-white/10 py-4 rounded-2xl font-black uppercase text-xs tracking-widest">Retry Scan</button>
+            <button id="verifyButton" class="flex-1 bg-indigo-600 py-4 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl">Verify Face</button>
+        </div>
+    </div>
+
+    <script>
+        const FACE_MODEL_URL = 'https://justadudewhohacks.github.io/face-api.js/models';
+        const faceVideo = document.getElementById('faceVideo');
+        const statusText = document.getElementById('statusText');
+        let currentStream = null;
+
+        async function loadModels() {
+            await Promise.all([
+                faceapi.nets.tinyFaceDetector.loadFromUri(FACE_MODEL_URL),
+                faceapi.nets.faceLandmark68Net.loadFromUri(FACE_MODEL_URL),
+                faceapi.nets.faceRecognitionNet.loadFromUri(FACE_MODEL_URL)
+            ]);
+        }
+
+        async function startCamera() {
+            if (currentStream) {
+                currentStream.getTracks().forEach((track) => track.stop());
+            }
+
+            currentStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+            faceVideo.srcObject = currentStream;
+            statusText.textContent = 'Camera ready. Keep your face centered and press Verify Face.';
+        }
+
+        async function verifyFace() {
+            statusText.textContent = 'Scanning...';
+
+            try {
+                const detection = await faceapi
+                    .detectSingleFace(faceVideo, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 }))
+                    .withFaceLandmarks()
+                    .withFaceDescriptor();
+
+                if (!detection) {
+                    throw new Error('No face detected. Try again in a brighter position.');
+                }
+
+                const response = await fetch('/verify-face-login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ descriptor: Array.from(detection.descriptor) })
+                });
+
+                const data = await response.json();
+                if (!response.ok || !data.success) {
+                    throw new Error(data.message || 'Face verification failed.');
+                }
+
+                statusText.textContent = 'Face verified. Opening dashboard...';
+                window.location.href = '/dashboard.html';
+            } catch (error) {
+                statusText.textContent = error.message || 'Face verification failed.';
+            }
+        }
+
+        document.getElementById('retryButton').addEventListener('click', startCamera);
+        document.getElementById('verifyButton').addEventListener('click', verifyFace);
+
+        (async function init() {
+            try {
+                await loadModels();
+                await startCamera();
+            } catch (error) {
+                statusText.textContent = 'Could not load face verification. Please return to login.';
+            }
+        })();
+    </script>
+</body>
+</html>

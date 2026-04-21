@@ -145,7 +145,7 @@
 
     <script>
     const socket = io(); 
-    const currentUser = localStorage.getItem('username'); 
+    let currentUser = null;
     const currentRoom = new URLSearchParams(window.location.search).get('room');
     const myPeer = new Peer(undefined, { host: '0.peerjs.com', port: 443, secure: true }); 
 
@@ -159,7 +159,6 @@
     let isMicActive = true;
     let myVideoElement = null;
 
-    socket.emit('join room', { username: currentUser, room: currentRoom });
     document.getElementById('roomTitle').textContent = currentRoom;
 
     function showToastNotification(msg) {
@@ -311,12 +310,20 @@
         const isMe = data.user === currentUser;
         const div = document.createElement('div');
         div.className = `flex ${isMe ? 'justify-end' : 'justify-start'} mb-6`;
-        div.innerHTML = `
-            <div class="${isMe ? 'bg-indigo-600 shadow-xl' : 'bg-slate-800'} p-5 rounded-2xl max-w-sm border border-white/5">
-                <p class="text-[8px] font-black uppercase opacity-50 mb-1 tracking-widest">${data.user}</p>
-                <p class="text-[13px] leading-relaxed">${data.msg}</p>
-            </div>
-        `;
+        const bubble = document.createElement('div');
+        bubble.className = `${isMe ? 'bg-indigo-600 shadow-xl' : 'bg-slate-800'} p-5 rounded-2xl max-w-sm border border-white/5`;
+
+        const author = document.createElement('p');
+        author.className = 'text-[8px] font-black uppercase opacity-50 mb-1 tracking-widest';
+        author.textContent = data.user;
+
+        const message = document.createElement('p');
+        message.className = 'text-[13px] leading-relaxed';
+        message.textContent = data.msg;
+
+        bubble.appendChild(author);
+        bubble.appendChild(message);
+        div.appendChild(bubble);
         document.getElementById('chatBox').appendChild(div);
         document.getElementById('chatBox').scrollTop = document.getElementById('chatBox').scrollHeight;
     }
@@ -324,12 +331,28 @@
     socket.on('chat message', data => addMessageUI(data));
     socket.on('load history', history => history.forEach(addMessageUI));
     socket.on('update user list', users => {
-        document.getElementById('userList').innerHTML = users.map(u => `
-            <li class="flex items-center space-x-4 bg-white/5 p-4 rounded-2xl border border-white/5">
-                <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                <span class="text-[10px] font-black uppercase tracking-widest italic">${u.username}</span>
-            </li>
-        `).join('');
+        const userList = document.getElementById('userList');
+        userList.innerHTML = '';
+
+        users.forEach((user) => {
+            const item = document.createElement('li');
+            item.className = 'flex items-center space-x-4 bg-white/5 p-4 rounded-2xl border border-white/5';
+
+            const dot = document.createElement('div');
+            dot.className = 'w-2 h-2 bg-green-500 rounded-full animate-pulse';
+
+            const name = document.createElement('span');
+            name.className = 'text-[10px] font-black uppercase tracking-widest italic';
+            name.textContent = user.username;
+
+            item.appendChild(dot);
+            item.appendChild(name);
+            userList.appendChild(item);
+        });
+    });
+
+    socket.on('chat-cleared', () => {
+        document.getElementById('chatBox').innerHTML = '';
     });
 
     async function clearChat() {
@@ -347,15 +370,32 @@
         const input = document.getElementById('ai-input'), messages = document.getElementById('ai-messages');
         const query = input.value; if(!query) return;
 
-        messages.innerHTML += `<div class="flex justify-end mb-3"><div class="bg-indigo-600 text-white px-4 py-2 rounded-2xl text-[11px] shadow-md max-w-[85%]">${query}</div></div>`;
+        const outgoingRow = document.createElement('div');
+        outgoingRow.className = 'flex justify-end mb-3';
+        const outgoingBubble = document.createElement('div');
+        outgoingBubble.className = 'bg-indigo-600 text-white px-4 py-2 rounded-2xl text-[11px] shadow-md max-w-[85%]';
+        outgoingBubble.textContent = query;
+        outgoingRow.appendChild(outgoingBubble);
+        messages.appendChild(outgoingRow);
         input.value = "Generating response...";
         messages.scrollTop = messages.scrollHeight;
 
         try {
             const res = await fetch('/ask-ai', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ prompt: query }) });
             const data = await res.json();
-            messages.innerHTML += `<div class="flex justify-start mb-4"><div class="bg-slate-800 border border-indigo-500/30 text-slate-200 px-4 py-3 rounded-2xl text-[11px] shadow-lg leading-relaxed max-w-[90%]"><i class="fas fa-magic text-indigo-400 mr-2"></i>${data.answer}</div></div>`;
-        } catch (err) { messages.innerHTML += `<div class="text-red-400 text-[10px] text-center">AI Error.</div>`; }
+            const incomingRow = document.createElement('div');
+            incomingRow.className = 'flex justify-start mb-4';
+            const incomingBubble = document.createElement('div');
+            incomingBubble.className = 'bg-slate-800 border border-indigo-500/30 text-slate-200 px-4 py-3 rounded-2xl text-[11px] shadow-lg leading-relaxed max-w-[90%]';
+            incomingBubble.textContent = data.answer;
+            incomingRow.appendChild(incomingBubble);
+            messages.appendChild(incomingRow);
+        } catch (err) {
+            const errorNode = document.createElement('div');
+            errorNode.className = 'text-red-400 text-[10px] text-center';
+            errorNode.textContent = 'AI Error.';
+            messages.appendChild(errorNode);
+        }
         input.value = ""; messages.scrollTop = messages.scrollHeight;
     }
 
@@ -389,6 +429,24 @@
         const msg = document.getElementById('messageInput').value;
         if(msg.trim()) { socket.emit('chat message', { user: currentUser, msg, room: currentRoom }); document.getElementById('messageInput').value = ''; }
     };
+
+    async function initializeRoom() {
+        try {
+            const response = await fetch('/me');
+            if (!response.ok) {
+                window.location.href = '/login.html';
+                return;
+            }
+
+            const data = await response.json();
+            currentUser = data.user.username;
+            socket.emit('join room', { username: currentUser, room: currentRoom });
+        } catch (error) {
+            window.location.href = '/login.html';
+        }
+    }
+
+    initializeRoom();
     </script>
 </body>
 </html>
