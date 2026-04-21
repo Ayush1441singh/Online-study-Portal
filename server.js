@@ -494,7 +494,7 @@ app.post('/register', rateLimiter({ windowMs: 15 * 60 * 1000, maxRequests: 10, k
 app.post('/login', rateLimiter({ windowMs: 15 * 60 * 1000, maxRequests: 20, keyPrefix: 'login' }), async (req, res) => {
     try {
         const email = ensureText(req.body.email, { min: 5, max: 120 });
-        const password = ensureText(req.body.password, { min: 8, max: 128 });
+        const password = ensureText(req.body.password, { min: 1, max: 128 });
 
         if (!email || !password || !validateEmail(email)) {
             return res.status(400).json({ success: false, message: 'Invalid email or password.' });
