@@ -66,6 +66,7 @@
             try {
                 const response = await fetch('/verify-otp', {
                     method: 'POST',
+                    credentials: 'same-origin',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ otp: otpInput.value.trim() })
                 });
@@ -92,7 +93,10 @@
             showStatus('Sending a new OTP...');
 
             try {
-                const response = await fetch('/resend-otp', { method: 'POST' });
+                const response = await fetch('/resend-otp', {
+                    method: 'POST',
+                    credentials: 'same-origin'
+                });
                 const data = await response.json();
                 if (!response.ok || !data.success) {
                     throw new Error(data.message || 'Could not resend OTP.');
@@ -114,7 +118,10 @@
         });
 
         backButton.addEventListener('click', async () => {
-            await fetch('/logout', { method: 'POST' });
+            await fetch('/logout', {
+                method: 'POST',
+                credentials: 'same-origin'
+            });
             sessionStorage.removeItem('otp_preview');
             window.location.href = '/login.html';
         });

@@ -88,6 +88,7 @@
             try {
                 const res = await fetch('/login', {
                     method: 'POST',
+                    credentials: 'same-origin',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         email: document.getElementById('email').value,
@@ -137,6 +138,7 @@
             try {
                 const optionsResponse = await fetch('/passkey/auth/options', {
                     method: 'POST',
+                    credentials: 'same-origin',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ email })
                 });
@@ -156,6 +158,7 @@
                 showStatus('Verifying passkey...');
                 const verifyResponse = await fetch('/passkey/auth/verify', {
                     method: 'POST',
+                    credentials: 'same-origin',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         email,

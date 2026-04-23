@@ -452,22 +452,36 @@ async function sendLoginOtp(user) {
     const otp = generateOtp();
     const otpExpiry = new Date(Date.now() + OTP_PENDING_TTL_MS);
 
+    await User.updateOne(
+        { _id: user._id },
+        {
+            $set: {
+                otp,
+                otpExpiry,
+            },
+        }
+    );
+
     user.otp = otp;
     user.otpExpiry = otpExpiry;
-    await user.save();
 
     if (!mailTransport) {
         console.warn(`OTP delivery is not configured. OTP for ${user.email}: ${otp}`);
         return otp;
     }
 
-    await mailTransport.sendMail({
-        from: mailFrom,
-        to: user.email,
-        subject: 'StudyPortal login OTP',
-        text: `Your StudyPortal verification code is ${otp}. It expires in 5 minutes.`,
-        html: `<p>Your StudyPortal verification code is <strong>${otp}</strong>.</p><p>It expires in 5 minutes.</p>`,
-    });
+    try {
+        await mailTransport.sendMail({
+            from: mailFrom,
+            to: user.email,
+            subject: 'StudyPortal login OTP',
+            text: `Your StudyPortal verification code is ${otp}. It expires in 5 minutes.`,
+            html: `<p>Your StudyPortal verification code is <strong>${otp}</strong>.</p><p>It expires in 5 minutes.</p>`,
+        });
+    } catch (error) {
+        console.error('OTP email delivery error:', error);
+        throw new Error('OTP_DELIVERY_FAILED');
+    }
 
     return otp;
 }
@@ -981,6 +995,14 @@ app.post('/login', rateLimiter({ windowMs: 15 * 60 * 1000, maxRequests: 20, keyP
         res.status(200).json(response);
     } catch (err) {
         console.error('Login error:', err);
+
+        if (err && err.message === 'OTP_DELIVERY_FAILED') {
+            return res.status(502).json({
+                success: false,
+                message: 'Password was correct, but the OTP email could not be sent. Check email settings and try again.',
+            });
+        }
+
         res.status(500).json({ success: false, message: 'Authentication failure.' });
     }
 });
@@ -1031,9 +1053,15 @@ app.post('/verify-otp', rateLimiter({ windowMs: 5 * 60 * 1000, maxRequests: 12, 
             return res.status(400).json({ success: false, message: 'Incorrect OTP. Please try again.' });
         }
 
-        user.otp = undefined;
-        user.otpExpiry = undefined;
-        await user.save();
+        await User.updateOne(
+            { _id: user._id },
+            {
+                $unset: {
+                    otp: 1,
+                    otpExpiry: 1,
+                },
+            }
+        );
 
         res.setHeader('Set-Cookie', [
             serializeCookie(OTP_PENDING_COOKIE, '', {
