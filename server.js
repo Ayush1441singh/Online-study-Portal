@@ -6,6 +6,7 @@ const { Server } = require('socket.io');
 const bcrypt = require('bcrypt');
 const nodemailer = require('nodemailer');
 const path = require('path');
+const fs = require('fs');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const User = require('./Models/User.js');
@@ -14,6 +15,8 @@ const RoomNote = require('./Models/RoomNote.js');
 
 const app = express();
 const server = http.createServer(app);
+
+loadEnvFile(path.join(__dirname, '.env'));
 
 const PORT = Number(process.env.PORT) || 3000;
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
@@ -56,31 +59,85 @@ const aiModelCandidates = [
     'gemini-1.5-flash',
 ].filter(Boolean);
 
+function loadEnvFile(filePath) {
+    if (!fs.existsSync(filePath)) {
+        return;
+    }
+
+    const content = fs.readFileSync(filePath, 'utf8');
+    const lines = content.split(/\r?\n/);
+
+    for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#')) {
+            continue;
+        }
+
+        const separatorIndex = trimmed.indexOf('=');
+        if (separatorIndex === -1) {
+            continue;
+        }
+
+        const key = trimmed.slice(0, separatorIndex).trim();
+        if (!key || process.env[key]) {
+            continue;
+        }
+
+        let value = trimmed.slice(separatorIndex + 1).trim();
+        if (
+            (value.startsWith('"') && value.endsWith('"')) ||
+            (value.startsWith("'") && value.endsWith("'"))
+        ) {
+            value = value.slice(1, -1);
+        }
+
+        process.env[key] = value;
+    }
+}
+
+function firstDefinedEnv(keys) {
+    for (const key of keys) {
+        const value = process.env[key];
+        if (value) {
+            return value;
+        }
+    }
+
+    return '';
+}
+
 function createMailTransport() {
-    if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+    const emailService = firstDefinedEnv(['EMAIL_SERVICE', 'SMTP_SERVICE', 'MAIL_SERVICE']) || 'gmail';
+    const smtpUser = firstDefinedEnv(['SMTP_USER', 'EMAIL_USER', 'GMAIL_USER']);
+    const smtpPass = firstDefinedEnv(['SMTP_PASS', 'EMAIL_PASS', 'EMAIL_APP_PASSWORD', 'GMAIL_APP_PASSWORD']);
+    const smtpHost = firstDefinedEnv(['SMTP_HOST']);
+    const smtpSecure = String(process.env.SMTP_SECURE || '').toLowerCase() === 'true';
+    const smtpPort = Number(process.env.SMTP_PORT) || (smtpSecure ? 465 : 587);
+
+    if (smtpHost && smtpUser && smtpPass) {
         return nodemailer.createTransport({
-            host: process.env.SMTP_HOST,
-            port: Number(process.env.SMTP_PORT) || 587,
-            secure: String(process.env.SMTP_SECURE || '').toLowerCase() === 'true',
+            host: smtpHost,
+            port: smtpPort,
+            secure: smtpSecure,
             connectionTimeout: Number(process.env.SMTP_CONNECTION_TIMEOUT_MS) || 10000,
             greetingTimeout: Number(process.env.SMTP_GREETING_TIMEOUT_MS) || 10000,
             socketTimeout: Number(process.env.SMTP_SOCKET_TIMEOUT_MS) || MAIL_SEND_TIMEOUT_MS,
             auth: {
-                user: process.env.SMTP_USER,
-                pass: process.env.SMTP_PASS,
+                user: smtpUser,
+                pass: smtpPass,
             },
         });
     }
 
-    if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+    if (smtpUser && smtpPass) {
         return nodemailer.createTransport({
-            service: process.env.EMAIL_SERVICE || 'gmail',
+            service: emailService,
             connectionTimeout: Number(process.env.SMTP_CONNECTION_TIMEOUT_MS) || 10000,
             greetingTimeout: Number(process.env.SMTP_GREETING_TIMEOUT_MS) || 10000,
             socketTimeout: Number(process.env.SMTP_SOCKET_TIMEOUT_MS) || MAIL_SEND_TIMEOUT_MS,
             auth: {
-                user: process.env.EMAIL_USER,
-                pass: process.env.EMAIL_PASS,
+                user: smtpUser,
+                pass: smtpPass,
             },
         });
     }
@@ -89,6 +146,21 @@ function createMailTransport() {
 }
 
 const mailTransport = createMailTransport();
+
+async function verifyMailTransport() {
+    if (!mailTransport) {
+        console.warn('OTP email transport is not configured. Add SMTP or Gmail credentials to .env.');
+        return;
+    }
+
+    try {
+        await mailTransport.verify();
+        console.log('OTP email transport is ready.');
+    } catch (error) {
+        console.error('OTP email transport verification failed:', error.message || error);
+        console.error('For Gmail, use EMAIL_USER plus a 16-character App Password in EMAIL_APP_PASSWORD.');
+    }
+}
 
 function isAllowedOrigin(origin) {
     if (!origin) {
@@ -1028,7 +1100,7 @@ app.post('/login', rateLimiter({ windowMs: 15 * 60 * 1000, maxRequests: 20, keyP
         if (err && err.message === 'OTP_DELIVERY_FAILED') {
             return res.status(502).json({
                 success: false,
-                message: 'Password was correct, but the OTP email could not be sent. Check email settings and try again.',
+                message: 'Password was correct, but the OTP email could not be sent. Verify SMTP or Gmail App Password settings and try again.',
             });
         }
 
@@ -1150,7 +1222,7 @@ app.post('/resend-otp', rateLimiter({ windowMs: 5 * 60 * 1000, maxRequests: 5, k
         res.status(200).json(response);
     } catch (error) {
         console.error('Resend OTP error:', error);
-        res.status(500).json({ success: false, message: 'Could not resend OTP.' });
+        res.status(500).json({ success: false, message: 'Could not resend OTP. Verify SMTP or Gmail App Password settings.' });
     }
 });
 
@@ -1403,4 +1475,5 @@ io.on('connection', (socket) => {
 
 server.listen(PORT, () => {
     console.log(`StudyPortal server listening on port ${PORT}`);
+    verifyMailTransport();
 });
