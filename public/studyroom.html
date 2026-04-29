@@ -1113,6 +1113,7 @@
     function setScreenStage(stream, label) {
         if (stream) {
             screenVideo.srcObject = stream;
+            screenVideo.onloadedmetadata = () => screenVideo.play().catch(() => {});
             screenVideo.style.display = 'block';
             screenPlaceholder.style.display = 'none';
             screenStatus.textContent = label;
@@ -1185,8 +1186,8 @@
             tile.className = 'tile';
             const participant = state.participants.find((item) => item.peerId === peerId);
             const name = participant ? participant.username : 'Participant';
-            const hasVideo = participant ? participant.hasVideo : entry.hasVideo;
-            const hasAudio = participant ? participant.hasAudio : entry.hasAudio;
+            const hasVideo = participant ? (participant.hasVideo || entry.hasVideo) : entry.hasVideo;
+            const hasAudio = participant ? (participant.hasAudio || entry.hasAudio) : entry.hasAudio;
 
             if (hasVideo) {
                 liveCount += 1;
