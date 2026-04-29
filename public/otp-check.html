@@ -39,7 +39,7 @@
         const statusText = document.getElementById('statusText');
         const otpHint = document.getElementById('otpHint');
         const otpPreview = document.getElementById('otpPreview');
-        const OTP_REQUEST_TIMEOUT_MS = 20000;
+        const OTP_REQUEST_TIMEOUT_MS = 45000;
 
         const emailHint = sessionStorage.getItem('otp_email_hint');
         const previewCode = sessionStorage.getItem('otp_preview');
@@ -127,7 +127,7 @@
                 showStatus('A fresh OTP has been sent.');
             } catch (error) {
                 if (error.name === 'AbortError') {
-                    showStatus('Resend OTP timed out. Please verify your email settings and try again.', true);
+                    showStatus('Resend is taking longer than expected. Wait a bit, then check your email or try again.', true);
                 } else {
                     showStatus(error.message || 'Could not resend OTP.', true);
                 }

@@ -1399,10 +1399,30 @@
         attachCallHandlers(call, 'media', participant.peerId);
     }
 
+    function syncScreenShareConnections() {
+        if (!state.screenStream) {
+            return;
+        }
+
+        state.participants
+            .filter((participant) => participant.peerId && participant.peerId !== state.myPeerId)
+            .forEach((participant) => {
+                const duplicate = [...state.activeCalls.values()].some((entry) => entry.type === 'screen' && entry.peerId === participant.peerId);
+                if (duplicate) {
+                    return;
+                }
+
+                const call = myPeer.call(participant.peerId, state.screenStream, { metadata: { type: 'screen' } });
+                attachCallHandlers(call, 'screen', participant.peerId);
+            });
+    }
+
     function syncPeerConnections() {
         state.participants
-            .filter((participant) => participant.peerId && participant.peerId !== state.myPeerId && participant.hasMedia)
+            .filter((participant) => participant.peerId && participant.peerId !== state.myPeerId)
             .forEach(connectToParticipant);
+
+        syncScreenShareConnections();
     }
 
     async function ensureLocalMedia(preferredSource) {
@@ -1468,13 +1488,7 @@
             setScreenStage(stream, 'You are sharing teaching content.');
             updateControlStates();
             socket.emit('screen-share-start', { room: currentRoom });
-
-            state.participants
-                .filter((participant) => participant.peerId && participant.peerId !== state.myPeerId)
-                .forEach((participant) => {
-                    const call = myPeer.call(participant.peerId, stream, { metadata: { type: 'screen' } });
-                    attachCallHandlers(call, 'screen', participant.peerId);
-                });
+            syncScreenShareConnections();
 
             stream.getVideoTracks()[0].onended = () => stopScreenShare();
             showToast('Screen share started.');
@@ -1596,7 +1610,7 @@
                 const answerStream = state.localStream || new MediaStream();
                 call.answer(answerStream);
             } else {
-                call.answer();
+                call.answer(new MediaStream());
             }
         } catch (error) {
             call.answer(new MediaStream());
