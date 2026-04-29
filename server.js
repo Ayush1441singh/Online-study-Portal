@@ -34,7 +34,7 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
 const dbURI = process.env.MONGODB_URI;
 const geminiApiKey = process.env.GEMINI_API_KEY;
 const sessionSecret = process.env.SESSION_SECRET || 'development-session-secret-change-me';
-const mailFrom = process.env.EMAIL_FROM || process.env.SMTP_USER || process.env.EMAIL_USER || 'no-reply@studyportal.local';
+const mailFrom = (process.env.EMAIL_FROM || process.env.SMTP_USER || process.env.EMAIL_USER || 'no-reply@studyportal.local').trim();
 
 if (!process.env.SESSION_SECRET) {
     console.warn('SESSION_SECRET is not set. Using an insecure development fallback.');
@@ -106,60 +106,126 @@ function firstDefinedEnv(keys) {
     return '';
 }
 
-function createMailTransport() {
-    const emailService = firstDefinedEnv(['EMAIL_SERVICE', 'SMTP_SERVICE', 'MAIL_SERVICE']) || 'gmail';
-    const smtpUser = firstDefinedEnv(['SMTP_USER', 'EMAIL_USER', 'GMAIL_USER']);
-    const smtpPass = firstDefinedEnv(['SMTP_PASS', 'EMAIL_PASS', 'EMAIL_APP_PASSWORD', 'GMAIL_APP_PASSWORD']);
-    const smtpHost = firstDefinedEnv(['SMTP_HOST']);
+function normalizeEnvValue(value) {
+    return typeof value === 'string' ? value.trim() : '';
+}
+
+function normalizeEmailPassword(password, serviceName) {
+    const normalized = normalizeEnvValue(password);
+
+    if (String(serviceName || '').toLowerCase() === 'gmail') {
+        return normalized.replace(/\s+/g, '');
+    }
+
+    return normalized;
+}
+
+function createSmtpConfig({ host, port, secure, user, pass }) {
+    return {
+        host,
+        port,
+        secure,
+        connectionTimeout: Number(process.env.SMTP_CONNECTION_TIMEOUT_MS) || 10000,
+        greetingTimeout: Number(process.env.SMTP_GREETING_TIMEOUT_MS) || 10000,
+        socketTimeout: Number(process.env.SMTP_SOCKET_TIMEOUT_MS) || MAIL_SEND_TIMEOUT_MS,
+        tls: {
+            servername: host,
+        },
+        auth: {
+            user,
+            pass,
+        },
+    };
+}
+
+function createMailTransports() {
+    const emailService = normalizeEnvValue(firstDefinedEnv(['EMAIL_SERVICE', 'SMTP_SERVICE', 'MAIL_SERVICE']) || 'gmail');
+    const smtpUser = normalizeEnvValue(firstDefinedEnv(['SMTP_USER', 'EMAIL_USER', 'GMAIL_USER']));
+    const smtpPass = normalizeEmailPassword(firstDefinedEnv(['SMTP_PASS', 'EMAIL_PASS', 'EMAIL_APP_PASSWORD', 'GMAIL_APP_PASSWORD']), emailService);
+    const smtpHost = normalizeEnvValue(firstDefinedEnv(['SMTP_HOST']));
     const smtpSecure = String(process.env.SMTP_SECURE || '').toLowerCase() === 'true';
     const smtpPort = Number(process.env.SMTP_PORT) || (smtpSecure ? 465 : 587);
+    const isGmail = emailService.toLowerCase() === 'gmail' || smtpUser.toLowerCase().endsWith('@gmail.com');
+    const transports = [];
 
     if (smtpHost && smtpUser && smtpPass) {
-        return nodemailer.createTransport({
-            host: smtpHost,
-            port: smtpPort,
-            secure: smtpSecure,
-            connectionTimeout: Number(process.env.SMTP_CONNECTION_TIMEOUT_MS) || 10000,
-            greetingTimeout: Number(process.env.SMTP_GREETING_TIMEOUT_MS) || 10000,
-            socketTimeout: Number(process.env.SMTP_SOCKET_TIMEOUT_MS) || MAIL_SEND_TIMEOUT_MS,
-            auth: {
+        transports.push({
+            label: `custom-${smtpHost}:${smtpPort}`,
+            transport: nodemailer.createTransport(createSmtpConfig({
+                host: smtpHost,
+                port: smtpPort,
+                secure: smtpSecure,
                 user: smtpUser,
                 pass: smtpPass,
-            },
+            })),
+        });
+    }
+
+    if (isGmail && smtpUser && smtpPass) {
+        transports.push({
+            label: 'gmail-465',
+            transport: nodemailer.createTransport(createSmtpConfig({
+                host: 'smtp.gmail.com',
+                port: 465,
+                secure: true,
+                user: smtpUser,
+                pass: smtpPass,
+            })),
+        });
+
+        transports.push({
+            label: 'gmail-587',
+            transport: nodemailer.createTransport({
+                ...createSmtpConfig({
+                    host: 'smtp.gmail.com',
+                    port: 587,
+                    secure: false,
+                    user: smtpUser,
+                    pass: smtpPass,
+                }),
+                requireTLS: true,
+            }),
         });
     }
 
     if (smtpUser && smtpPass) {
-        return nodemailer.createTransport({
-            service: emailService,
-            connectionTimeout: Number(process.env.SMTP_CONNECTION_TIMEOUT_MS) || 10000,
-            greetingTimeout: Number(process.env.SMTP_GREETING_TIMEOUT_MS) || 10000,
-            socketTimeout: Number(process.env.SMTP_SOCKET_TIMEOUT_MS) || MAIL_SEND_TIMEOUT_MS,
-            auth: {
-                user: smtpUser,
-                pass: smtpPass,
-            },
+        transports.push({
+            label: `service-${emailService}`,
+            transport: nodemailer.createTransport({
+                service: emailService,
+                connectionTimeout: Number(process.env.SMTP_CONNECTION_TIMEOUT_MS) || 10000,
+                greetingTimeout: Number(process.env.SMTP_GREETING_TIMEOUT_MS) || 10000,
+                socketTimeout: Number(process.env.SMTP_SOCKET_TIMEOUT_MS) || MAIL_SEND_TIMEOUT_MS,
+                auth: {
+                    user: smtpUser,
+                    pass: smtpPass,
+                },
+            }),
         });
     }
 
-    return null;
+    return transports;
 }
 
-const mailTransport = createMailTransport();
+const mailTransports = createMailTransports();
 
 async function verifyMailTransport() {
-    if (!mailTransport) {
+    if (!mailTransports.length) {
         console.warn('OTP email transport is not configured. Add SMTP or Gmail credentials to .env.');
         return;
     }
 
-    try {
-        await mailTransport.verify();
-        console.log('OTP email transport is ready.');
-    } catch (error) {
-        console.error('OTP email transport verification failed:', error.message || error);
-        console.error('For Gmail, use EMAIL_USER plus a 16-character App Password in EMAIL_APP_PASSWORD.');
+    for (const candidate of mailTransports) {
+        try {
+            await candidate.transport.verify();
+            console.log(`OTP email transport is ready via ${candidate.label}.`);
+            return;
+        } catch (error) {
+            console.error(`OTP email transport verification failed via ${candidate.label}:`, error && error.stack ? error.stack : (error.message || error));
+        }
     }
+
+    console.error('For Gmail, use EMAIL_USER plus a 16-character App Password in EMAIL_APP_PASSWORD.');
 }
 
 function isAllowedOrigin(origin) {
@@ -562,29 +628,36 @@ async function sendLoginOtp(user) {
     user.otp = otp;
     user.otpExpiry = otpExpiry;
 
-    if (!mailTransport) {
+    if (!mailTransports.length) {
         console.warn(`OTP delivery is not configured. OTP for ${user.email}: ${otp}`);
         return otp;
     }
 
-    try {
-        await withTimeout(
-            mailTransport.sendMail({
-                from: mailFrom,
-                to: user.email,
-                subject: 'StudyPortal login OTP',
-                text: `Your StudyPortal verification code is ${otp}. It expires in 5 minutes.`,
-                html: `<p>Your StudyPortal verification code is <strong>${otp}</strong>.</p><p>It expires in 5 minutes.</p>`,
-            }),
-            MAIL_SEND_TIMEOUT_MS,
-            () => new Error('OTP_DELIVERY_TIMEOUT')
-        );
-    } catch (error) {
-        console.error('OTP email delivery error:', error);
-        throw new Error('OTP_DELIVERY_FAILED');
+    let lastError = null;
+
+    for (const candidate of mailTransports) {
+        try {
+            await withTimeout(
+                candidate.transport.sendMail({
+                    from: mailFrom,
+                    to: user.email,
+                    subject: 'StudyPortal login OTP',
+                    text: `Your StudyPortal verification code is ${otp}. It expires in 5 minutes.`,
+                    html: `<p>Your StudyPortal verification code is <strong>${otp}</strong>.</p><p>It expires in 5 minutes.</p>`,
+                }),
+                MAIL_SEND_TIMEOUT_MS,
+                () => new Error('OTP_DELIVERY_TIMEOUT')
+            );
+            return otp;
+        } catch (error) {
+            lastError = error;
+            console.error(`OTP email delivery error via ${candidate.label}:`, error && error.stack ? error.stack : (error.message || error));
+        }
     }
 
-    return otp;
+    const deliveryError = new Error('OTP_DELIVERY_FAILED');
+    deliveryError.details = lastError ? (lastError.response || lastError.message || String(lastError)) : 'Unknown SMTP failure';
+    throw deliveryError;
 }
 
 app.set('trust proxy', 1);
@@ -1066,7 +1139,7 @@ app.post('/login', rateLimiter({ windowMs: 15 * 60 * 1000, maxRequests: 20, keyP
             return res.status(400).json({ success: false, message: 'Invalid email or password.' });
         }
 
-        if (IS_PRODUCTION && !mailTransport) {
+        if (IS_PRODUCTION && !mailTransports.length) {
             return res.status(503).json({
                 success: false,
                 message: 'OTP email delivery is not configured on the server yet.',
@@ -1089,7 +1162,7 @@ app.post('/login', rateLimiter({ windowMs: 15 * 60 * 1000, maxRequests: 20, keyP
             message: 'Password accepted. We sent a 6-digit code to your email.',
         };
 
-        if (!IS_PRODUCTION && !mailTransport) {
+        if (!IS_PRODUCTION && !mailTransports.length) {
             response.otpPreview = otp;
         }
 
@@ -1100,7 +1173,7 @@ app.post('/login', rateLimiter({ windowMs: 15 * 60 * 1000, maxRequests: 20, keyP
         if (err && err.message === 'OTP_DELIVERY_FAILED') {
             return res.status(502).json({
                 success: false,
-                message: 'Password was correct, but the OTP email could not be sent. Verify SMTP or Gmail App Password settings and try again.',
+                message: `Password was correct, but the OTP email could not be sent. ${err.details || 'Verify SMTP or Gmail App Password settings and try again.'}`,
             });
         }
 
@@ -1205,7 +1278,7 @@ app.post('/resend-otp', rateLimiter({ windowMs: 5 * 60 * 1000, maxRequests: 5, k
             return res.status(404).json({ success: false, message: 'Account not found.' });
         }
 
-        if (IS_PRODUCTION && !mailTransport) {
+        if (IS_PRODUCTION && !mailTransports.length) {
             return res.status(503).json({
                 success: false,
                 message: 'OTP email delivery is not configured on the server yet.',
@@ -1215,14 +1288,14 @@ app.post('/resend-otp', rateLimiter({ windowMs: 5 * 60 * 1000, maxRequests: 5, k
         const otp = await sendLoginOtp(user);
         const response = { success: true, message: 'A new OTP has been sent to your email.' };
 
-        if (!IS_PRODUCTION && !mailTransport) {
+        if (!IS_PRODUCTION && !mailTransports.length) {
             response.otpPreview = otp;
         }
 
         res.status(200).json(response);
     } catch (error) {
         console.error('Resend OTP error:', error);
-        res.status(500).json({ success: false, message: 'Could not resend OTP. Verify SMTP or Gmail App Password settings.' });
+        res.status(500).json({ success: false, message: `Could not resend OTP. ${error.details || 'Verify SMTP or Gmail App Password settings.'}` });
     }
 });
 
