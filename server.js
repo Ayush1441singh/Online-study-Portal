@@ -917,11 +917,7 @@ app.get('/otp-check.html', (req, res) => {
         return res.redirect('/dashboard.html');
     }
 
-    if (!getPendingOtpSession(req)) {
-        return res.redirect('/login.html');
-    }
-
-    res.sendFile(path.join(__dirname, 'public', 'otp-check.html'));
+    res.redirect('/login.html');
 });
 
 app.get('/face-check.html', (req, res) => {
@@ -1328,70 +1324,33 @@ app.post('/login', rateLimiter({ windowMs: 15 * 60 * 1000, maxRequests: 20, keyP
             return res.status(400).json({ success: false, message: 'Invalid email or password.' });
         }
 
-        if (IS_PRODUCTION && !emailDeliveryConfigured) {
-            return res.status(503).json({
-                success: false,
-                message: 'OTP email delivery is not configured on the server yet.',
-            });
-        }
-
-        let otpPreview = null;
-
-        try {
-            const sentOtp = await sendLoginOtp(user);
-            if (!IS_PRODUCTION && !emailDeliveryConfigured) {
-                otpPreview = sentOtp;
-            }
-        } catch (error) {
-            console.error('Login OTP send error:', error);
-
-            if (!IS_PRODUCTION && ALLOW_OTP_PREVIEW_FALLBACK && user.otp && user.otpExpiry && user.otpExpiry.getTime() > Date.now()) {
-                otpPreview = user.otp;
-            } else {
-                return res.status(500).json({
-                    success: false,
-                    message: `Could not send OTP. ${error.details || 'Verify SMTP or Gmail App Password settings.'}`,
-                });
-            }
-        }
-
         res.setHeader('Set-Cookie', [
-            serializeCookie(SESSION_COOKIE, '', {
+            serializeCookie(OTP_PENDING_COOKIE, '', {
                 httpOnly: true,
                 sameSite: 'Strict',
                 secure: IS_PRODUCTION,
                 path: '/',
                 maxAge: 0,
             }),
-            serializeCookie(OTP_PENDING_COOKIE, createSessionToken({
+            serializeCookie(SESSION_COOKIE, createSessionToken({
                 id: String(user._id),
                 username: user.username,
                 email: user.email,
-                stage: 'otp-login',
-                exp: Date.now() + OTP_PENDING_TTL_MS,
             }), {
                 httpOnly: true,
                 sameSite: 'Strict',
                 secure: IS_PRODUCTION,
                 path: '/',
-                maxAge: Math.floor(OTP_PENDING_TTL_MS / 1000),
+                maxAge: Math.floor(SESSION_TTL_MS / 1000),
             }),
         ]);
 
-        const response = {
+        res.status(200).json({
             success: true,
-            otpRequired: true,
-            nextStep: '/otp-check.html',
             username: user.username,
             email: user.email,
-            message: otpPreview ? 'OTP preview mode is active for this login.' : 'A 6-digit OTP has been sent to your email.',
-        };
-
-        if (otpPreview) {
-            response.otpPreview = otpPreview;
-        }
-
-        res.status(200).json(response);
+            message: 'Login successful.',
+        });
     } catch (err) {
         console.error('Login error:', err);
         res.status(500).json({ success: false, message: 'Authentication failure.' });
@@ -1780,5 +1739,4 @@ io.on('connection', (socket) => {
 
 server.listen(PORT, () => {
     console.log(`StudyPortal server listening on port ${PORT}`);
-    verifyMailTransport();
 });
