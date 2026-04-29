@@ -142,7 +142,7 @@ function createSmtpConfig({ host, port, secure, user, pass }) {
 function createMailTransports() {
     const emailService = normalizeEnvValue(firstDefinedEnv(['EMAIL_SERVICE', 'SMTP_SERVICE', 'MAIL_SERVICE']) || 'gmail');
     const smtpUser = normalizeEnvValue(firstDefinedEnv(['SMTP_USER', 'EMAIL_USER', 'GMAIL_USER']));
-    const smtpPass = normalizeEmailPassword(firstDefinedEnv(['SMTP_PASS', 'EMAIL_PASS', 'EMAIL_APP_PASSWORD', 'GMAIL_APP_PASSWORD']), emailService);
+    const smtpPass = normalizeEmailPassword(firstDefinedEnv(['SMTP_PASS', 'EMAIL_APP_PASSWORD', 'GMAIL_APP_PASSWORD', 'EMAIL_PASS']), emailService);
     const smtpHost = normalizeEnvValue(firstDefinedEnv(['SMTP_HOST']));
     const smtpSecure = String(process.env.SMTP_SECURE || '').toLowerCase() === 'true';
     const smtpPort = Number(process.env.SMTP_PORT) || (smtpSecure ? 465 : 587);
