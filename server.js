@@ -25,6 +25,7 @@ const OTP_PENDING_COOKIE = 'studyportal_otp_pending';
 const SESSION_TTL_MS = 1000 * 60 * 60 * 12;
 const OTP_PENDING_TTL_MS = 1000 * 60 * 5;
 const MAIL_SEND_TIMEOUT_MS = Number(process.env.OTP_MAIL_TIMEOUT_MS) || 15000;
+const ALLOW_OTP_PREVIEW_FALLBACK = String(process.env.ALLOW_OTP_PREVIEW_FALLBACK || 'true').toLowerCase() === 'true';
 const MAX_JSON_SIZE = '16kb';
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
     .split(',')
@@ -1125,6 +1126,8 @@ app.post('/register', rateLimiter({ windowMs: 15 * 60 * 1000, maxRequests: 10, k
 });
 
 app.post('/login', rateLimiter({ windowMs: 15 * 60 * 1000, maxRequests: 20, keyPrefix: 'login' }), async (req, res) => {
+    const fallbackEmail = typeof req.body?.email === 'string' ? req.body.email.toLowerCase().trim() : '';
+
     try {
         const email = ensureText(req.body.email, { min: 5, max: 120 });
         const password = ensureText(req.body.password, { min: 1, max: 128 });
@@ -1171,6 +1174,27 @@ app.post('/login', rateLimiter({ windowMs: 15 * 60 * 1000, maxRequests: 20, keyP
         console.error('Login error:', err);
 
         if (err && err.message === 'OTP_DELIVERY_FAILED') {
+            if (ALLOW_OTP_PREVIEW_FALLBACK) {
+                const fallbackUser = await User.findOne({ email: fallbackEmail }).select('username email otp otpExpiry');
+                if (fallbackUser && fallbackUser.otp && fallbackUser.otpExpiry && fallbackUser.otpExpiry.getTime() > Date.now()) {
+                    setOtpPendingCookie(res, {
+                        id: String(fallbackUser._id),
+                        username: fallbackUser.username,
+                        email: fallbackUser.email,
+                        stage: 'otp-login',
+                        exp: Date.now() + OTP_PENDING_TTL_MS,
+                    });
+
+                    return res.status(200).json({
+                        success: true,
+                        requiresOtpVerification: true,
+                        message: 'OTP email failed, so preview mode is enabled for this login.',
+                        otpPreview: fallbackUser.otp,
+                        otpFallback: true,
+                    });
+                }
+            }
+
             return res.status(502).json({
                 success: false,
                 message: `Password was correct, but the OTP email could not be sent. ${err.details || 'Verify SMTP or Gmail App Password settings and try again.'}`,
@@ -1295,6 +1319,21 @@ app.post('/resend-otp', rateLimiter({ windowMs: 5 * 60 * 1000, maxRequests: 5, k
         res.status(200).json(response);
     } catch (error) {
         console.error('Resend OTP error:', error);
+        if (error && error.message === 'OTP_DELIVERY_FAILED' && ALLOW_OTP_PREVIEW_FALLBACK) {
+            const cookies = parseCookies(req);
+            const pendingSession = verifySessionToken(cookies[OTP_PENDING_COOKIE]);
+            if (pendingSession && pendingSession.stage === 'otp-login') {
+                const fallbackUser = await User.findById(pendingSession.id).select('otp otpExpiry');
+                if (fallbackUser && fallbackUser.otp && fallbackUser.otpExpiry && fallbackUser.otpExpiry.getTime() > Date.now()) {
+                    return res.status(200).json({
+                        success: true,
+                        message: 'OTP email failed, so preview mode is enabled for this resend.',
+                        otpPreview: fallbackUser.otp,
+                        otpFallback: true,
+                    });
+                }
+            }
+        }
         res.status(500).json({ success: false, message: `Could not resend OTP. ${error.details || 'Verify SMTP or Gmail App Password settings.'}` });
     }
 });
