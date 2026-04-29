@@ -263,6 +263,8 @@ function setSecurityHeaders(req, res, next) {
         'https://0.peerjs.com',
         'https://cdn.jsdelivr.net',
         'https://justadudewhohacks.github.io',
+        'stun:',
+        'turn:',
         'wss:',
     ];
 
