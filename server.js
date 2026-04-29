@@ -447,6 +447,17 @@ function attachUserFromSession(req, res, next) {
     next();
 }
 
+function getPendingOtpSession(req) {
+    const cookies = parseCookies(req);
+    const pendingSession = verifySessionToken(cookies[OTP_PENDING_COOKIE]);
+
+    if (!pendingSession || pendingSession.stage !== 'otp-login') {
+        return null;
+    }
+
+    return pendingSession;
+}
+
 function requireAuth(req, res, next) {
     if (!req.user) {
         return res.status(401).json({ success: false, message: 'Authentication required.' });
@@ -729,7 +740,15 @@ app.get('/dashboard.html', requirePageAuth, (req, res) => {
 });
 
 app.get('/otp-check.html', (req, res) => {
-    res.redirect('/login.html');
+    if (req.user) {
+        return res.redirect('/dashboard.html');
+    }
+
+    if (!getPendingOtpSession(req)) {
+        return res.redirect('/login.html');
+    }
+
+    res.sendFile(path.join(__dirname, 'public', 'otp-check.html'));
 });
 
 app.get('/face-check.html', (req, res) => {
@@ -1136,17 +1155,70 @@ app.post('/login', rateLimiter({ windowMs: 15 * 60 * 1000, maxRequests: 20, keyP
             return res.status(400).json({ success: false, message: 'Invalid email or password.' });
         }
 
-        setSessionCookie(res, {
-            id: String(user._id),
-            username: user.username,
-            email: user.email,
-        });
+        if (IS_PRODUCTION && !mailTransports.length) {
+            return res.status(503).json({
+                success: false,
+                message: 'OTP email delivery is not configured on the server yet.',
+            });
+        }
 
-        res.status(200).json({
+        let otpPreview = null;
+
+        try {
+            const otp = await sendLoginOtp(user);
+            if (!IS_PRODUCTION && !mailTransports.length) {
+                otpPreview = otp;
+            }
+        } catch (error) {
+            console.error('Login OTP send error:', error);
+
+            if (!IS_PRODUCTION && ALLOW_OTP_PREVIEW_FALLBACK && user.otp && user.otpExpiry && user.otpExpiry.getTime() > Date.now()) {
+                otpPreview = user.otp;
+            } else {
+                return res.status(500).json({
+                    success: false,
+                    message: `Could not send OTP. ${error.details || 'Verify SMTP or Gmail App Password settings.'}`,
+                });
+            }
+        }
+
+        res.setHeader('Set-Cookie', [
+            serializeCookie(SESSION_COOKIE, '', {
+                httpOnly: true,
+                sameSite: 'Strict',
+                secure: IS_PRODUCTION,
+                path: '/',
+                maxAge: 0,
+            }),
+            serializeCookie(OTP_PENDING_COOKIE, createSessionToken({
+                id: String(user._id),
+                username: user.username,
+                email: user.email,
+                stage: 'otp-login',
+                exp: Date.now() + OTP_PENDING_TTL_MS,
+            }), {
+                httpOnly: true,
+                sameSite: 'Strict',
+                secure: IS_PRODUCTION,
+                path: '/',
+                maxAge: Math.floor(OTP_PENDING_TTL_MS / 1000),
+            }),
+        ]);
+
+        const response = {
             success: true,
+            otpRequired: true,
+            nextStep: '/otp-check.html',
             username: user.username,
             email: user.email,
-        });
+            message: otpPreview ? 'OTP preview mode is active for this login.' : 'A 6-digit OTP has been sent to your email.',
+        };
+
+        if (otpPreview) {
+            response.otpPreview = otpPreview;
+        }
+
+        res.status(200).json(response);
     } catch (err) {
         console.error('Login error:', err);
         res.status(500).json({ success: false, message: 'Authentication failure.' });

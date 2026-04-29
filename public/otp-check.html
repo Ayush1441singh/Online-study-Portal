@@ -94,6 +94,7 @@
                 }
 
                 sessionStorage.removeItem('otp_preview');
+                sessionStorage.removeItem('otp_email_hint');
                 showStatus('OTP verified. Opening dashboard...');
                 window.location.href = '/dashboard.html';
             } catch (error) {
@@ -143,6 +144,7 @@
                 credentials: 'same-origin'
             });
             sessionStorage.removeItem('otp_preview');
+            sessionStorage.removeItem('otp_email_hint');
             window.location.href = '/login.html';
         });
     </script>

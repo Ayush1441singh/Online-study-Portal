@@ -13,11 +13,11 @@
 <body class="min-h-screen flex items-center justify-center p-6">
     <div class="glass w-full max-w-md p-10 rounded-[2.5rem] shadow-2xl">
         <h1 class="text-3xl font-black italic text-center text-indigo-500 mb-4 uppercase">StudyPortal</h1>
-        <p class="text-center text-xs uppercase tracking-[0.25em] text-slate-500 font-bold mb-10">Password Login + Passkey Option</p>
+        <p class="text-center text-xs uppercase tracking-[0.25em] text-slate-500 font-bold mb-10">Password Login + Email OTP + Passkey Option</p>
         <form id="loginForm" class="space-y-6">
             <input id="email" type="email" required placeholder="Email Address" class="w-full bg-white/5 border border-white/10 p-4 rounded-2xl outline-none focus:border-indigo-500">
             <input id="password" type="password" required placeholder="Password" class="w-full bg-white/5 border border-white/10 p-4 rounded-2xl outline-none focus:border-indigo-500">
-            <button id="loginButton" type="submit" class="w-full bg-indigo-600 py-4 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl">Sign In</button>
+            <button id="loginButton" type="submit" class="w-full bg-indigo-600 py-4 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl">Send OTP</button>
         </form>
         <div class="mt-4">
             <button id="passkeyButton" type="button" class="w-full border border-indigo-400/30 bg-indigo-500/10 py-4 rounded-2xl font-black uppercase text-xs tracking-widest text-indigo-200">Sign In With Passkey</button>
@@ -82,8 +82,10 @@
         form.addEventListener('submit', async (event) => {
             event.preventDefault();
             button.disabled = true;
-            button.textContent = 'Signing In...';
+            button.textContent = 'Sending OTP...';
             showStatus('Checking credentials...');
+
+            const email = document.getElementById('email').value.trim();
 
             try {
                 const res = await fetch('/login', {
@@ -91,7 +93,7 @@
                     credentials: 'same-origin',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        email: document.getElementById('email').value,
+                        email,
                         password: document.getElementById('password').value
                     })
                 });
@@ -101,13 +103,26 @@
                     throw new Error(data.message || 'Login failed.');
                 }
 
+                if (data.otpRequired) {
+                    sessionStorage.setItem('otp_email_hint', data.email || email);
+                    if (data.otpPreview) {
+                        sessionStorage.setItem('otp_preview', data.otpPreview);
+                    } else {
+                        sessionStorage.removeItem('otp_preview');
+                    }
+
+                    showStatus('OTP sent. Opening verification...');
+                    window.location.href = data.nextStep || '/otp-check.html';
+                    return;
+                }
+
                 showStatus('Login successful. Opening dashboard...');
                 window.location.href = '/dashboard.html';
             } catch (error) {
                 showStatus(error.message || 'Authentication failed.', true);
             } finally {
                 button.disabled = false;
-                button.textContent = 'Sign In';
+                button.textContent = 'Send OTP';
             }
         });
 
