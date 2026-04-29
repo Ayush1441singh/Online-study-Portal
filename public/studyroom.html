@@ -1267,9 +1267,10 @@
     }
 
     function closeCallsByType(type) {
-        [...state.activeCalls.values()]
-            .filter((entry) => entry.type === type)
-            .forEach((entry) => {
+        [...state.activeCalls.entries()]
+            .filter(([, entry]) => entry.type === type)
+            .forEach(([key, entry]) => {
+                state.activeCalls.delete(key);
                 try { entry.call.close(); } catch (error) {}
             });
     }
@@ -1377,7 +1378,9 @@
         state.localStream = stream;
         syncMediaState();
         refreshRoomUi();
-        syncPeerConnections();
+        setTimeout(() => {
+            syncPeerConnections();
+        }, 120);
         return stream;
     }
 
@@ -1605,7 +1608,9 @@
     socket.on('room-state', (participants) => {
         state.participants = participants || [];
         refreshRoomUi();
-        syncPeerConnections();
+        setTimeout(() => {
+            syncPeerConnections();
+        }, 80);
     });
 
     socket.on('notify-share-start', (payload) => {
