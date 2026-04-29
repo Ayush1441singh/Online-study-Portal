@@ -626,7 +626,7 @@ function withTimeout(promise, timeoutMs, errorFactory) {
     });
 }
 
-async function sendLoginOtp(user) {
+async function issueLoginOtp(user) {
     const otp = generateOtp();
     const otpExpiry = new Date(Date.now() + OTP_PENDING_TTL_MS);
 
@@ -642,6 +642,14 @@ async function sendLoginOtp(user) {
 
     user.otp = otp;
     user.otpExpiry = otpExpiry;
+
+    return otp;
+}
+
+async function deliverLoginOtpEmail(user, otp) {
+    if (!otp) {
+        throw new Error('OTP_MISSING');
+    }
 
     if (!mailTransports.length) {
         console.warn(`OTP delivery is not configured. OTP for ${user.email}: ${otp}`);
@@ -673,6 +681,12 @@ async function sendLoginOtp(user) {
     const deliveryError = new Error('OTP_DELIVERY_FAILED');
     deliveryError.details = lastError ? (lastError.response || lastError.message || String(lastError)) : 'Unknown SMTP failure';
     throw deliveryError;
+}
+
+async function sendLoginOtp(user) {
+    const otp = await issueLoginOtp(user);
+    await deliverLoginOtpEmail(user, otp);
+    return otp;
 }
 
 app.set('trust proxy', 1);
@@ -1165,9 +1179,9 @@ app.post('/login', rateLimiter({ windowMs: 15 * 60 * 1000, maxRequests: 20, keyP
         let otpPreview = null;
 
         try {
-            const otp = await sendLoginOtp(user);
+            const sentOtp = await sendLoginOtp(user);
             if (!IS_PRODUCTION && !mailTransports.length) {
-                otpPreview = otp;
+                otpPreview = sentOtp;
             }
         } catch (error) {
             console.error('Login OTP send error:', error);
