@@ -33,6 +33,7 @@
         const button = document.getElementById('loginButton');
         const passkeyButton = document.getElementById('passkeyButton');
         const statusMessage = document.getElementById('statusMessage');
+        const OTP_REQUEST_TIMEOUT_MS = 20000;
 
         function base64UrlToBytes(value) {
             const base64 = value.replace(/-/g, '+').replace(/_/g, '/');
@@ -79,6 +80,22 @@
             statusMessage.className = `mt-5 text-center text-xs font-bold uppercase tracking-widest ${isError ? 'text-red-400' : 'text-emerald-400'}`;
         }
 
+        async function fetchJsonWithTimeout(url, options, timeoutMs) {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+            try {
+                const response = await fetch(url, {
+                    ...options,
+                    signal: controller.signal
+                });
+                const data = await response.json();
+                return { response, data };
+            } finally {
+                clearTimeout(timer);
+            }
+        }
+
         form.addEventListener('submit', async (event) => {
             event.preventDefault();
             button.disabled = true;
@@ -86,7 +103,7 @@
             showStatus('Checking credentials...');
 
             try {
-                const res = await fetch('/login', {
+                const { response: res, data } = await fetchJsonWithTimeout('/login', {
                     method: 'POST',
                     credentials: 'same-origin',
                     headers: { 'Content-Type': 'application/json' },
@@ -94,9 +111,8 @@
                         email: document.getElementById('email').value,
                         password: document.getElementById('password').value
                     })
-                });
+                }, OTP_REQUEST_TIMEOUT_MS);
 
-                const data = await res.json();
                 if (!res.ok || !data.success) {
                     throw new Error(data.message || 'Login failed.');
                 }
@@ -111,7 +127,11 @@
                 showStatus('OTP sent. Redirecting to verification...');
                 window.location.href = '/otp-check.html';
             } catch (error) {
-                showStatus(error.message || 'Authentication failed.', true);
+                if (error.name === 'AbortError') {
+                    showStatus('OTP request timed out. Please check your email settings and try again.', true);
+                } else {
+                    showStatus(error.message || 'Authentication failed.', true);
+                }
             } finally {
                 button.disabled = false;
                 button.textContent = 'Send OTP';

@@ -39,6 +39,7 @@
         const statusText = document.getElementById('statusText');
         const otpHint = document.getElementById('otpHint');
         const otpPreview = document.getElementById('otpPreview');
+        const OTP_REQUEST_TIMEOUT_MS = 20000;
 
         const emailHint = sessionStorage.getItem('otp_email_hint');
         const previewCode = sessionStorage.getItem('otp_preview');
@@ -55,6 +56,22 @@
         function showStatus(message, isError = false) {
             statusText.textContent = message;
             statusText.className = `text-center text-xs font-bold uppercase tracking-widest mt-6 ${isError ? 'text-red-400' : 'text-slate-400'}`;
+        }
+
+        async function fetchJsonWithTimeout(url, options, timeoutMs) {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+            try {
+                const response = await fetch(url, {
+                    ...options,
+                    signal: controller.signal
+                });
+                const data = await response.json();
+                return { response, data };
+            } finally {
+                clearTimeout(timer);
+            }
         }
 
         otpForm.addEventListener('submit', async (event) => {
@@ -93,11 +110,10 @@
             showStatus('Sending a new OTP...');
 
             try {
-                const response = await fetch('/resend-otp', {
+                const { response, data } = await fetchJsonWithTimeout('/resend-otp', {
                     method: 'POST',
                     credentials: 'same-origin'
-                });
-                const data = await response.json();
+                }, OTP_REQUEST_TIMEOUT_MS);
                 if (!response.ok || !data.success) {
                     throw new Error(data.message || 'Could not resend OTP.');
                 }
@@ -110,7 +126,11 @@
 
                 showStatus('A fresh OTP has been sent.');
             } catch (error) {
-                showStatus(error.message || 'Could not resend OTP.', true);
+                if (error.name === 'AbortError') {
+                    showStatus('Resend OTP timed out. Please verify your email settings and try again.', true);
+                } else {
+                    showStatus(error.message || 'Could not resend OTP.', true);
+                }
             } finally {
                 resendButton.disabled = false;
                 resendButton.textContent = 'Resend OTP';

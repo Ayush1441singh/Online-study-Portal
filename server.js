@@ -21,6 +21,7 @@ const SESSION_COOKIE = 'studyportal_session';
 const OTP_PENDING_COOKIE = 'studyportal_otp_pending';
 const SESSION_TTL_MS = 1000 * 60 * 60 * 12;
 const OTP_PENDING_TTL_MS = 1000 * 60 * 5;
+const MAIL_SEND_TIMEOUT_MS = Number(process.env.OTP_MAIL_TIMEOUT_MS) || 15000;
 const MAX_JSON_SIZE = '16kb';
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
     .split(',')
@@ -61,6 +62,9 @@ function createMailTransport() {
             host: process.env.SMTP_HOST,
             port: Number(process.env.SMTP_PORT) || 587,
             secure: String(process.env.SMTP_SECURE || '').toLowerCase() === 'true',
+            connectionTimeout: Number(process.env.SMTP_CONNECTION_TIMEOUT_MS) || 10000,
+            greetingTimeout: Number(process.env.SMTP_GREETING_TIMEOUT_MS) || 10000,
+            socketTimeout: Number(process.env.SMTP_SOCKET_TIMEOUT_MS) || MAIL_SEND_TIMEOUT_MS,
             auth: {
                 user: process.env.SMTP_USER,
                 pass: process.env.SMTP_PASS,
@@ -71,6 +75,9 @@ function createMailTransport() {
     if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
         return nodemailer.createTransport({
             service: process.env.EMAIL_SERVICE || 'gmail',
+            connectionTimeout: Number(process.env.SMTP_CONNECTION_TIMEOUT_MS) || 10000,
+            greetingTimeout: Number(process.env.SMTP_GREETING_TIMEOUT_MS) || 10000,
+            socketTimeout: Number(process.env.SMTP_SOCKET_TIMEOUT_MS) || MAIL_SEND_TIMEOUT_MS,
             auth: {
                 user: process.env.EMAIL_USER,
                 pass: process.env.EMAIL_PASS,
@@ -448,6 +455,24 @@ function parseAuthenticatorData(encoded) {
     };
 }
 
+function withTimeout(promise, timeoutMs, errorFactory) {
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+            reject(errorFactory());
+        }, timeoutMs);
+
+        promise
+            .then((value) => {
+                clearTimeout(timer);
+                resolve(value);
+            })
+            .catch((error) => {
+                clearTimeout(timer);
+                reject(error);
+            });
+    });
+}
+
 async function sendLoginOtp(user) {
     const otp = generateOtp();
     const otpExpiry = new Date(Date.now() + OTP_PENDING_TTL_MS);
@@ -471,13 +496,17 @@ async function sendLoginOtp(user) {
     }
 
     try {
-        await mailTransport.sendMail({
-            from: mailFrom,
-            to: user.email,
-            subject: 'StudyPortal login OTP',
-            text: `Your StudyPortal verification code is ${otp}. It expires in 5 minutes.`,
-            html: `<p>Your StudyPortal verification code is <strong>${otp}</strong>.</p><p>It expires in 5 minutes.</p>`,
-        });
+        await withTimeout(
+            mailTransport.sendMail({
+                from: mailFrom,
+                to: user.email,
+                subject: 'StudyPortal login OTP',
+                text: `Your StudyPortal verification code is ${otp}. It expires in 5 minutes.`,
+                html: `<p>Your StudyPortal verification code is <strong>${otp}</strong>.</p><p>It expires in 5 minutes.</p>`,
+            }),
+            MAIL_SEND_TIMEOUT_MS,
+            () => new Error('OTP_DELIVERY_TIMEOUT')
+        );
     } catch (error) {
         console.error('OTP email delivery error:', error);
         throw new Error('OTP_DELIVERY_FAILED');
