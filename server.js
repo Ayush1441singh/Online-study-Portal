@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const express = require('express');
 const mongoose = require('mongoose');
 const http = require('http');
+const https = require('https');
 const { Server } = require('socket.io');
 const bcrypt = require('bcrypt');
 const nodemailer = require('nodemailer');
@@ -209,10 +210,147 @@ function createMailTransports() {
 }
 
 const mailTransports = createMailTransports();
+const emailApiConfig = createEmailApiConfig();
+const emailDeliveryConfigured = Boolean(emailApiConfig || mailTransports.length);
+
+function createEmailApiConfig() {
+    const provider = normalizeEnvValue(firstDefinedEnv(['EMAIL_API_PROVIDER', 'OTP_EMAIL_PROVIDER'])).toLowerCase();
+    const apiKey = normalizeEnvValue(firstDefinedEnv(['EMAIL_API_KEY', 'RESEND_API_KEY', 'BREVO_API_KEY']));
+
+    if (!provider || !apiKey) {
+        return null;
+    }
+
+    if (provider === 'resend') {
+        return {
+            provider,
+            endpoint: 'https://api.resend.com/emails',
+            headers: {
+                Authorization: `Bearer ${apiKey}`,
+            },
+            buildPayload({ to, subject, text, html }) {
+                return {
+                    from: mailFrom,
+                    to: [to],
+                    subject,
+                    text,
+                    html,
+                };
+            },
+        };
+    }
+
+    if (provider === 'brevo') {
+        return {
+            provider,
+            endpoint: 'https://api.brevo.com/v3/smtp/email',
+            headers: {
+                'api-key': apiKey,
+            },
+            buildPayload({ to, subject, text, html }) {
+                return {
+                    sender: {
+                        email: mailFrom,
+                        name: 'StudyPortal',
+                    },
+                    to: [{ email: to }],
+                    subject,
+                    textContent: text,
+                    htmlContent: html,
+                };
+            },
+        };
+    }
+
+    console.warn(`Unsupported EMAIL_API_PROVIDER "${provider}". Supported values are "resend" and "brevo".`);
+    return null;
+}
+
+function postJson(urlString, headers, payload, timeoutMs) {
+    return new Promise((resolve, reject) => {
+        const url = new URL(urlString);
+        const body = JSON.stringify(payload);
+        const request = https.request({
+            protocol: url.protocol,
+            hostname: url.hostname,
+            port: url.port || (url.protocol === 'https:' ? 443 : 80),
+            path: `${url.pathname}${url.search}`,
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(body),
+                ...headers,
+            },
+            timeout: timeoutMs,
+        }, (response) => {
+            let responseBody = '';
+            response.setEncoding('utf8');
+            response.on('data', (chunk) => {
+                responseBody += chunk;
+            });
+            response.on('end', () => {
+                let parsed = null;
+                try {
+                    parsed = responseBody ? JSON.parse(responseBody) : null;
+                } catch (error) {}
+
+                if (response.statusCode >= 200 && response.statusCode < 300) {
+                    resolve({
+                        statusCode: response.statusCode,
+                        body: parsed,
+                    });
+                    return;
+                }
+
+                const deliveryError = new Error('EMAIL_API_REQUEST_FAILED');
+                deliveryError.statusCode = response.statusCode;
+                deliveryError.details = (
+                    parsed && (parsed.message || parsed.error || parsed.code || JSON.stringify(parsed))
+                ) || responseBody || `HTTP ${response.statusCode}`;
+                reject(deliveryError);
+            });
+        });
+
+        request.on('timeout', () => {
+            request.destroy(new Error('EMAIL_API_TIMEOUT'));
+        });
+
+        request.on('error', (error) => {
+            reject(error);
+        });
+
+        request.write(body);
+        request.end();
+    });
+}
+
+async function sendMailViaApi({ to, subject, text, html }) {
+    if (!emailApiConfig) {
+        return false;
+    }
+
+    await withTimeout(
+        postJson(
+            emailApiConfig.endpoint,
+            emailApiConfig.headers,
+            emailApiConfig.buildPayload({ to, subject, text, html }),
+            MAIL_SEND_TIMEOUT_MS
+        ),
+        MAIL_SEND_TIMEOUT_MS + 1000,
+        () => new Error('EMAIL_API_TIMEOUT')
+    );
+
+    return true;
+}
 
 async function verifyMailTransport() {
+    if (emailApiConfig) {
+        console.log(`OTP email transport is configured via HTTP API provider "${emailApiConfig.provider}".`);
+        return;
+    }
+
     if (!mailTransports.length) {
-        console.warn('OTP email transport is not configured. Add SMTP or Gmail credentials to .env.');
+        console.warn('OTP email transport is not configured. Add an email API key or SMTP/Gmail credentials to .env.');
         return;
     }
 
@@ -651,6 +789,27 @@ async function deliverLoginOtpEmail(user, otp) {
         throw new Error('OTP_MISSING');
     }
 
+    const subject = 'StudyPortal login OTP';
+    const text = `Your StudyPortal verification code is ${otp}. It expires in 5 minutes.`;
+    const html = `<p>Your StudyPortal verification code is <strong>${otp}</strong>.</p><p>It expires in 5 minutes.</p>`;
+
+    if (emailApiConfig) {
+        try {
+            await sendMailViaApi({
+                to: user.email,
+                subject,
+                text,
+                html,
+            });
+            return otp;
+        } catch (error) {
+            const deliveryError = new Error('OTP_DELIVERY_FAILED');
+            deliveryError.details = error.details || error.message || 'Unknown email API failure';
+            console.error(`OTP email delivery error via api-${emailApiConfig.provider}:`, error && error.stack ? error.stack : (error.message || error));
+            throw deliveryError;
+        }
+    }
+
     if (!mailTransports.length) {
         console.warn(`OTP delivery is not configured. OTP for ${user.email}: ${otp}`);
         return otp;
@@ -664,9 +823,9 @@ async function deliverLoginOtpEmail(user, otp) {
                 candidate.transport.sendMail({
                     from: mailFrom,
                     to: user.email,
-                    subject: 'StudyPortal login OTP',
-                    text: `Your StudyPortal verification code is ${otp}. It expires in 5 minutes.`,
-                    html: `<p>Your StudyPortal verification code is <strong>${otp}</strong>.</p><p>It expires in 5 minutes.</p>`,
+                    subject,
+                    text,
+                    html,
                 }),
                 MAIL_SEND_TIMEOUT_MS,
                 () => new Error('OTP_DELIVERY_TIMEOUT')
@@ -1169,7 +1328,7 @@ app.post('/login', rateLimiter({ windowMs: 15 * 60 * 1000, maxRequests: 20, keyP
             return res.status(400).json({ success: false, message: 'Invalid email or password.' });
         }
 
-        if (IS_PRODUCTION && !mailTransports.length) {
+        if (IS_PRODUCTION && !emailDeliveryConfigured) {
             return res.status(503).json({
                 success: false,
                 message: 'OTP email delivery is not configured on the server yet.',
@@ -1180,7 +1339,7 @@ app.post('/login', rateLimiter({ windowMs: 15 * 60 * 1000, maxRequests: 20, keyP
 
         try {
             const sentOtp = await sendLoginOtp(user);
-            if (!IS_PRODUCTION && !mailTransports.length) {
+            if (!IS_PRODUCTION && !emailDeliveryConfigured) {
                 otpPreview = sentOtp;
             }
         } catch (error) {
@@ -1336,7 +1495,7 @@ app.post('/resend-otp', rateLimiter({ windowMs: 5 * 60 * 1000, maxRequests: 5, k
             return res.status(404).json({ success: false, message: 'Account not found.' });
         }
 
-        if (IS_PRODUCTION && !mailTransports.length) {
+        if (IS_PRODUCTION && !emailDeliveryConfigured) {
             return res.status(503).json({
                 success: false,
                 message: 'OTP email delivery is not configured on the server yet.',
@@ -1346,7 +1505,7 @@ app.post('/resend-otp', rateLimiter({ windowMs: 5 * 60 * 1000, maxRequests: 5, k
         const otp = await sendLoginOtp(user);
         const response = { success: true, message: 'A new OTP has been sent to your email.' };
 
-        if (!IS_PRODUCTION && !mailTransports.length) {
+        if (!IS_PRODUCTION && !emailDeliveryConfigured) {
             response.otpPreview = otp;
         }
 
