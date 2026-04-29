@@ -726,18 +726,11 @@ app.get('/dashboard.html', requirePageAuth, (req, res) => {
 });
 
 app.get('/otp-check.html', (req, res) => {
-    const cookies = parseCookies(req);
-    const pendingSession = verifySessionToken(cookies[OTP_PENDING_COOKIE]);
-
-    if (!pendingSession) {
-        return res.redirect('/login.html');
-    }
-
-    res.sendFile(path.join(__dirname, 'public', 'otp-check.html'));
+    res.redirect('/login.html');
 });
 
 app.get('/face-check.html', (req, res) => {
-    res.redirect('/otp-check.html');
+    res.redirect('/login.html');
 });
 
 app.get('/studyroom.html', requirePageAuth, (req, res) => {
@@ -818,7 +811,7 @@ app.get('/security-status', requireAuth, async (req, res) => {
     const user = await User.findById(req.user.id).select('passkeyCredentialId passkeyCreatedAt');
     res.status(200).json({
         success: true,
-        otpEnabled: true,
+        otpEnabled: false,
         passkeyAvailable: Boolean(user && user.passkeyCredentialId),
         passkeyCreatedAt: user && user.passkeyCreatedAt ? user.passkeyCreatedAt.toISOString() : null,
     });
@@ -1126,8 +1119,6 @@ app.post('/register', rateLimiter({ windowMs: 15 * 60 * 1000, maxRequests: 10, k
 });
 
 app.post('/login', rateLimiter({ windowMs: 15 * 60 * 1000, maxRequests: 20, keyPrefix: 'login' }), async (req, res) => {
-    const fallbackEmail = typeof req.body?.email === 'string' ? req.body.email.toLowerCase().trim() : '';
-
     try {
         const email = ensureText(req.body.email, { min: 5, max: 120 });
         const password = ensureText(req.body.password, { min: 1, max: 128 });
@@ -1142,65 +1133,19 @@ app.post('/login', rateLimiter({ windowMs: 15 * 60 * 1000, maxRequests: 20, keyP
             return res.status(400).json({ success: false, message: 'Invalid email or password.' });
         }
 
-        if (IS_PRODUCTION && !mailTransports.length) {
-            return res.status(503).json({
-                success: false,
-                message: 'OTP email delivery is not configured on the server yet.',
-            });
-        }
-
-        const otp = await sendLoginOtp(user);
-
-        setOtpPendingCookie(res, {
+        setSessionCookie(res, {
             id: String(user._id),
             username: user.username,
             email: user.email,
-            stage: 'otp-login',
-            exp: Date.now() + OTP_PENDING_TTL_MS,
         });
 
-        const response = {
+        res.status(200).json({
             success: true,
-            requiresOtpVerification: true,
-            message: 'Password accepted. We sent a 6-digit code to your email.',
-        };
-
-        if (!IS_PRODUCTION && !mailTransports.length) {
-            response.otpPreview = otp;
-        }
-
-        res.status(200).json(response);
+            username: user.username,
+            email: user.email,
+        });
     } catch (err) {
         console.error('Login error:', err);
-
-        if (err && err.message === 'OTP_DELIVERY_FAILED') {
-            if (ALLOW_OTP_PREVIEW_FALLBACK) {
-                const fallbackUser = await User.findOne({ email: fallbackEmail }).select('username email otp otpExpiry');
-                if (fallbackUser && fallbackUser.otp && fallbackUser.otpExpiry && fallbackUser.otpExpiry.getTime() > Date.now()) {
-                    setOtpPendingCookie(res, {
-                        id: String(fallbackUser._id),
-                        username: fallbackUser.username,
-                        email: fallbackUser.email,
-                        stage: 'otp-login',
-                        exp: Date.now() + OTP_PENDING_TTL_MS,
-                    });
-
-                    return res.status(200).json({
-                        success: true,
-                        requiresOtpVerification: true,
-                        message: 'OTP email failed, so preview mode is enabled for this login.',
-                        otpPreview: fallbackUser.otp,
-                        otpFallback: true,
-                    });
-                }
-            }
-
-            return res.status(502).json({
-                success: false,
-                message: `Password was correct, but the OTP email could not be sent. ${err.details || 'Verify SMTP or Gmail App Password settings and try again.'}`,
-            });
-        }
-
         res.status(500).json({ success: false, message: 'Authentication failure.' });
     }
 });
