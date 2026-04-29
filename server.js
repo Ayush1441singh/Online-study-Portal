@@ -261,6 +261,7 @@ function setSecurityHeaders(req, res, next) {
         "'self'",
         'https://generativelanguage.googleapis.com',
         'https://0.peerjs.com',
+        'https://unpkg.com',
         'https://cdn.jsdelivr.net',
         'https://justadudewhohacks.github.io',
         'stun:',
