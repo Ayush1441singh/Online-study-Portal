@@ -19,17 +19,6 @@
             <input id="password" type="password" required placeholder="Password" class="w-full bg-white/5 border border-white/10 p-4 rounded-2xl outline-none focus:border-indigo-500">
             <button id="loginButton" type="submit" class="w-full bg-indigo-600 py-4 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl">Sign In</button>
         </form>
-        <div class="mt-3 text-center">
-            <button id="forgotPasswordToggle" type="button" class="text-xs font-bold uppercase tracking-widest text-indigo-300">Forgot Password?</button>
-        </div>
-        <form id="forgotPasswordForm" class="hidden mt-6 space-y-4">
-            <input id="resetOtp" type="text" inputmode="numeric" maxlength="6" placeholder="6-Digit Reset Code" class="w-full bg-white/5 border border-white/10 p-4 rounded-2xl outline-none focus:border-indigo-500">
-            <input id="newPassword" type="password" placeholder="New Password" class="w-full bg-white/5 border border-white/10 p-4 rounded-2xl outline-none focus:border-indigo-500">
-            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <button id="sendResetCodeButton" type="button" class="w-full border border-indigo-400/30 bg-indigo-500/10 py-4 rounded-2xl font-black uppercase text-xs tracking-widest text-indigo-200">Send Reset Code</button>
-                <button id="resetPasswordButton" type="submit" class="w-full bg-emerald-600 py-4 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl">Reset Password</button>
-            </div>
-        </form>
         <div class="mt-4">
             <button id="passkeyButton" type="button" class="w-full border border-indigo-400/30 bg-indigo-500/10 py-4 rounded-2xl font-black uppercase text-xs tracking-widest text-indigo-200">Sign In With Passkey</button>
         </div>
@@ -43,10 +32,6 @@
         const form = document.getElementById('loginForm');
         const button = document.getElementById('loginButton');
         const passkeyButton = document.getElementById('passkeyButton');
-        const forgotPasswordToggle = document.getElementById('forgotPasswordToggle');
-        const forgotPasswordForm = document.getElementById('forgotPasswordForm');
-        const sendResetCodeButton = document.getElementById('sendResetCodeButton');
-        const resetPasswordButton = document.getElementById('resetPasswordButton');
         const statusMessage = document.getElementById('statusMessage');
 
         function base64UrlToBytes(value) {
@@ -127,83 +112,6 @@
             } finally {
                 button.disabled = false;
                 button.textContent = 'Sign In';
-            }
-        });
-
-        forgotPasswordToggle.addEventListener('click', () => {
-            forgotPasswordForm.classList.toggle('hidden');
-        });
-
-        sendResetCodeButton.addEventListener('click', async () => {
-            const email = document.getElementById('email').value.trim();
-
-            if (!email) {
-                showStatus('Enter your email first to receive a reset code.', true);
-                return;
-            }
-
-            sendResetCodeButton.disabled = true;
-            sendResetCodeButton.textContent = 'Sending...';
-            showStatus('Sending password reset code...');
-
-            try {
-                const response = await fetch('/forgot-password-request', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email })
-                });
-                const data = await response.json();
-
-                if (!response.ok || !data.success) {
-                    throw new Error(data.message || 'Could not send reset code.');
-                }
-
-                if (data.otpPreview) {
-                    document.getElementById('resetOtp').value = data.otpPreview;
-                }
-
-                showStatus(data.message || 'Reset code sent. Check your email.');
-            } catch (error) {
-                showStatus(error.message || 'Could not send reset code.', true);
-            } finally {
-                sendResetCodeButton.disabled = false;
-                sendResetCodeButton.textContent = 'Send Reset Code';
-            }
-        });
-
-        forgotPasswordForm.addEventListener('submit', async (event) => {
-            event.preventDefault();
-
-            const email = document.getElementById('email').value.trim();
-            const otp = document.getElementById('resetOtp').value.trim();
-            const newPassword = document.getElementById('newPassword').value;
-
-            resetPasswordButton.disabled = true;
-            resetPasswordButton.textContent = 'Resetting...';
-            showStatus('Resetting password...');
-
-            try {
-                const response = await fetch('/forgot-password-reset', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, otp, newPassword })
-                });
-                const data = await response.json();
-
-                if (!response.ok || !data.success) {
-                    throw new Error(data.message || 'Could not reset password.');
-                }
-
-                document.getElementById('password').value = '';
-                document.getElementById('newPassword').value = '';
-                document.getElementById('resetOtp').value = '';
-                forgotPasswordForm.classList.add('hidden');
-                showStatus(data.message || 'Password reset successful.');
-            } catch (error) {
-                showStatus(error.message || 'Could not reset password.', true);
-            } finally {
-                resetPasswordButton.disabled = false;
-                resetPasswordButton.textContent = 'Reset Password';
             }
         });
 
