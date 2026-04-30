@@ -29,6 +29,14 @@ const userSchema = new mongoose.Schema({
         type: Date
     },
 
+    passwordResetOtp: {
+        type: String
+    },
+
+    passwordResetOtpExpiry: {
+        type: Date
+    },
+
     faceDescriptor: {
         type: [Number],
         default: undefined

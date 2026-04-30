@@ -848,6 +848,90 @@ async function sendLoginOtp(user) {
     return otp;
 }
 
+async function issuePasswordResetOtp(user) {
+    const otp = generateOtp();
+    const otpExpiry = new Date(Date.now() + OTP_PENDING_TTL_MS);
+
+    await User.updateOne(
+        { _id: user._id },
+        {
+            $set: {
+                passwordResetOtp: otp,
+                passwordResetOtpExpiry: otpExpiry,
+            },
+        }
+    );
+
+    user.passwordResetOtp = otp;
+    user.passwordResetOtpExpiry = otpExpiry;
+
+    return otp;
+}
+
+async function deliverPasswordResetOtpEmail(user, otp) {
+    if (!otp) {
+        throw new Error('PASSWORD_RESET_OTP_MISSING');
+    }
+
+    const subject = 'StudyPortal password reset code';
+    const text = `Your StudyPortal password reset code is ${otp}. It expires in 5 minutes.`;
+    const html = `<p>Your StudyPortal password reset code is <strong>${otp}</strong>.</p><p>It expires in 5 minutes.</p>`;
+
+    if (emailApiConfig) {
+        try {
+            await sendMailViaApi({
+                to: user.email,
+                subject,
+                text,
+                html,
+            });
+            return otp;
+        } catch (error) {
+            const deliveryError = new Error('PASSWORD_RESET_DELIVERY_FAILED');
+            deliveryError.details = error.details || error.message || 'Unknown email API failure';
+            console.error(`Password reset email delivery error via api-${emailApiConfig.provider}:`, error && error.stack ? error.stack : (error.message || error));
+            throw deliveryError;
+        }
+    }
+
+    if (!mailTransports.length) {
+        console.warn(`Password reset delivery is not configured. Reset code for ${user.email}: ${otp}`);
+        return otp;
+    }
+
+    let lastError = null;
+
+    for (const candidate of mailTransports) {
+        try {
+            await withTimeout(
+                candidate.transport.sendMail({
+                    from: mailFrom,
+                    to: user.email,
+                    subject,
+                    text,
+                    html,
+                }),
+                MAIL_SEND_TIMEOUT_MS,
+                () => new Error('PASSWORD_RESET_DELIVERY_TIMEOUT')
+            );
+            return otp;
+        } catch (error) {
+            lastError = error;
+            console.error(`Password reset email delivery error via ${candidate.label}:`, error && error.stack ? error.stack : (error.message || error));
+        }
+    }
+
+    const deliveryError = new Error('PASSWORD_RESET_DELIVERY_FAILED');
+    deliveryError.details = lastError ? (lastError.response || lastError.message || String(lastError)) : 'Unknown SMTP failure';
+    throw deliveryError;
+}
+
+async function sendPasswordResetOtp(user) {
+    const otp = await issuePasswordResetOtp(user);
+    await deliverPasswordResetOtpEmail(user, otp);
+    return otp;
+}
+
 app.set('trust proxy', 1);
 app.use(setSecurityHeaders);
 app.use((req, res, next) => {
@@ -1354,6 +1438,116 @@ app.post('/login', rateLimiter({ windowMs: 15 * 60 * 1000, maxRequests: 20, keyP
     } catch (err) {
         console.error('Login error:', err);
         res.status(500).json({ success: false, message: 'Authentication failure.' });
+    }
+});
+
+app.post('/forgot-password-request', rateLimiter({ windowMs: 15 * 60 * 1000, maxRequests: 6, keyPrefix: 'forgot-password-request' }), async (req, res) => {
+    try {
+        const email = ensureText(req.body.email, { min: 5, max: 120 });
+
+        if (!email || !validateEmail(email)) {
+            return res.status(400).json({ success: false, message: 'Enter a valid email address.' });
+        }
+
+        const normalizedEmail = email.toLowerCase();
+        const user = await User.findOne({ email: normalizedEmail }).select('email passwordResetOtp passwordResetOtpExpiry');
+
+        if (!user) {
+            return res.status(200).json({
+                success: true,
+                message: 'If this email is registered, a reset code has been sent.',
+            });
+        }
+
+        if (IS_PRODUCTION && !emailDeliveryConfigured) {
+            return res.status(503).json({
+                success: false,
+                message: 'Password reset email delivery is not configured on the server yet.',
+            });
+        }
+
+        const otp = await sendPasswordResetOtp(user);
+        const response = {
+            success: true,
+            message: 'If this email is registered, a reset code has been sent.',
+        };
+
+        if (!IS_PRODUCTION && !emailDeliveryConfigured) {
+            response.otpPreview = otp;
+        }
+
+        res.status(200).json(response);
+    } catch (error) {
+        console.error('Forgot password request error:', error);
+        if (error && error.message === 'PASSWORD_RESET_DELIVERY_FAILED' && ALLOW_OTP_PREVIEW_FALLBACK) {
+            const email = ensureText(req.body.email, { min: 5, max: 120 });
+            if (email && validateEmail(email)) {
+                const fallbackUser = await User.findOne({ email: email.toLowerCase() }).select('passwordResetOtp passwordResetOtpExpiry');
+                if (fallbackUser && fallbackUser.passwordResetOtp && fallbackUser.passwordResetOtpExpiry && fallbackUser.passwordResetOtpExpiry.getTime() > Date.now()) {
+                    return res.status(200).json({
+                        success: true,
+                        message: 'Reset email failed, so preview mode is enabled for this request.',
+                        otpPreview: fallbackUser.passwordResetOtp,
+                        otpFallback: true,
+                    });
+                }
+            }
+        }
+        res.status(500).json({ success: false, message: `Could not send reset code. ${error.details || 'Verify SMTP or Gmail App Password settings.'}` });
+    }
+});
+
+app.post('/forgot-password-reset', rateLimiter({ windowMs: 15 * 60 * 1000, maxRequests: 8, keyPrefix: 'forgot-password-reset' }), async (req, res) => {
+    try {
+        const email = ensureText(req.body.email, { min: 5, max: 120 });
+        const otp = ensureText(req.body.otp, { min: 6, max: 6 });
+        const newPassword = ensureText(req.body.newPassword, { min: 6, max: 128 });
+
+        if (!email || !validateEmail(email)) {
+            return res.status(400).json({ success: false, message: 'Enter a valid email address.' });
+        }
+
+        if (!otp || !/^\d{6}$/.test(otp)) {
+            return res.status(400).json({ success: false, message: 'Enter the 6-digit reset code.' });
+        }
+
+        if (!newPassword) {
+            return res.status(400).json({ success: false, message: 'Enter a new password.' });
+        }
+
+        const normalizedEmail = email.toLowerCase();
+        const user = await User.findOne({ email: normalizedEmail }).select('password passwordResetOtp passwordResetOtpExpiry');
+
+        if (!user || !user.passwordResetOtp || !user.passwordResetOtpExpiry) {
+            return res.status(400).json({ success: false, message: 'No password reset request is active for this account.' });
+        }
+
+        if (user.passwordResetOtpExpiry.getTime() < Date.now()) {
+            await User.updateOne(
+                { _id: user._id },
+                {
+                    $unset: {
+                        passwordResetOtp: 1,
+                        passwordResetOtpExpiry: 1,
+                    },
+                }
+            );
+            return res.status(401).json({ success: false, message: 'Reset code expired. Request a new one.' });
+        }
+
+        if (user.passwordResetOtp !== otp) {
+            return res.status(400).json({ success: false, message: 'Incorrect reset code.' });
+        }
+
+        user.password = await bcrypt.hash(newPassword, 12);
+        user.passwordResetOtp = undefined;
+        user.passwordResetOtpExpiry = undefined;
+        await user.save();
+
+        res.status(200).json({ success: true, message: 'Password reset successful. You can sign in now.' });
+    } catch (error) {
+        console.error('Forgot password reset error:', error);
+        res.status(500).json({ success: false, message: 'Could not reset password.' });
     }
 });
 
