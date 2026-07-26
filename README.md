@@ -2,6 +2,12 @@
 
 A modern **collaborative study platform** where students can join study rooms, interact in real-time, and solve doubts together using chat, video calls, and screen sharing.
 
+## AIML Project Feature
+
+This project now includes a **Student Performance Prediction and Study Recommendation System**. It uses a supervised **K-Nearest Neighbors (KNN)** classifier trained on 24 labelled student-learning samples. The model considers weekly study hours, attendance, previous score, assignment score, and sleep hours to predict one of four performance groups: **At Risk**, **Needs Improvement**, **On Track**, or **High Performer**.
+
+After logging in, select **ML Predictor** on the dashboard to use the model. The ML logic is implemented in `ml/studentPerformanceModel.js` and is served through the authenticated `POST /api/ml/predict-performance` API.
+
 ---
 
 ## 🚀 Features

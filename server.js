@@ -9,6 +9,7 @@ const nodemailer = require('nodemailer');
 const path = require('path');
 const fs = require('fs');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { featureNames, predictStudentPerformance } = require('./ml/studentPerformanceModel.js');
 
 const User = require('./Models/User.js');
 const Message = require('./Models/message.js');
@@ -926,6 +927,25 @@ app.get('/face-check.html', (req, res) => {
 
 app.get('/studyroom.html', requirePageAuth, (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'studyroom.html'));
+});
+
+app.get('/ml-predictor.html', requirePageAuth, (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'ml-predictor.html'));
+});
+
+app.post('/api/ml/predict-performance', requireAuth, rateLimiter({ windowMs: 60 * 1000, maxRequests: 20, keyPrefix: 'ml-predict' }), (req, res) => {
+    const input = {};
+    for (const featureName of featureNames) {
+        const value = Number(req.body[featureName]);
+        if (!Number.isFinite(value) || value < 0) {
+            return res.status(400).json({ message: `Provide a valid ${featureName}.` });
+        }
+        input[featureName] = value;
+    }
+    if (input.attendance > 100 || input.previousScore > 100 || input.assignmentScore > 100 || input.sleepHours > 24 || input.studyHours > 80) {
+        return res.status(400).json({ message: 'One or more values are outside the allowed range.' });
+    }
+    return res.json(predictStudentPerformance(input));
 });
 
 app.use(express.static(path.join(__dirname, 'public'), { index: false }));
